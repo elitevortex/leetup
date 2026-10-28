@@ -23,6 +23,7 @@ export default function Connect() {
   const [username, setUsername] = useState('');
   const [preview, setPreview] = useState<LeetCodePreview | null>(null);
   const [verified, setVerified] = useState(false);
+  const [contested, setContested] = useState(false);
   const [entering, setEntering] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +38,7 @@ export default function Connect() {
       const res = await startLeetCodeLink(u);
       setPreview(res.preview);
       setVerified(res.verified);
+      setContested(res.contested);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Something went wrong. Try again.');
     } finally {
@@ -50,7 +52,7 @@ export default function Connect() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, gap: 14, padding: 20 }} keyboardShouldPersistTaps="handled">
           <T variant="title">Connect your LeetCode</T>
-          <T variant="body">Your profile mirrors your real LeetCode stats. Your first post proves the account is yours, so there’s nothing to paste.</T>
+          <T variant="body">Your profile mirrors your real LeetCode stats. Jump straight in: your feed is open all day today, and your first post proves the account is yours.</T>
 
           <SectionLabel>LeetCode username</SectionLabel>
           <Input
@@ -89,6 +91,10 @@ export default function Connect() {
                     <BadgeCheck size={16} color={Colors.accent} />
                     <T variant="monoMedium" style={{ fontSize: 12 }} color={Colors.accent}>verified via GitHub</T>
                   </View>
+                ) : contested ? (
+                  <T variant="bodySm" color={Colors.medium}>
+                    Someone else on LeetUp claimed this account with a post. If it’s yours, verify with GitHub or the profile code from Home to take it back.
+                  </T>
                 ) : null}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Count value={preview.easy} label="EASY" fg={Colors.easy} bg={Colors.easyTint} line={Colors.easyLine} />

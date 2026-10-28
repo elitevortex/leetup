@@ -123,14 +123,18 @@ export interface FriendRow {
   direction: 'incoming' | 'outgoing';
 }
 
-export type ChallengeProblem = Pick<Problem, 'slug' | 'frontend_id' | 'title' | 'difficulty'>;
-
-// Your own link to a LeetCode account; unverified until a challenge post, GitHub or the bio code proves it
+// Your own link to a LeetCode account; unverified until a post, GitHub or the bio code proves it
 export interface LeetCodeLink {
   leetcode_username: string;
   verify_code: string;
   verified_at: string | null;
-  challenge_slugs: string[];
+}
+
+// The viewer's own lock: open after posting today, or all of the day they joined
+export interface FeedState {
+  unlocked: boolean;
+  posted_today: boolean;
+  first_day: boolean;
 }
 
 export interface LeetCodePreview {
