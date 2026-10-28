@@ -3,10 +3,10 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollVie
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, Check, ChevronLeft, Code, Image as ImageIcon, Play, Search, X } from 'lucide-react-native';
+import { BadgeCheck, Camera, Check, ChevronLeft, Code, Image as ImageIcon, Play, Search, X } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../constants/theme';
 import { useAuth } from '../lib/auth-context';
-import { ApiError, postSolve, searchProblems, uploadSolveMedia } from '../lib/api';
+import { ApiError, fetchChallengeProblems, postSolve, searchProblems, uploadSolveMedia } from '../lib/api';
 import { formatDuration } from '../lib/format';
 import { saveTimer } from '../lib/timer';
 import { DIFFICULTY_POINTS, Problem } from '../types';
@@ -27,7 +27,7 @@ interface PickedMedia {
 type Status = { kind: 'idle' } | { kind: 'posting' } | { kind: 'waiting'; message: string; attempt: number } | { kind: 'error'; message: string };
 
 export default function PostSolve() {
-  const { userId } = useAuth();
+  const { userId, link, verified, refreshProfile } = useAuth();
   const params = useLocalSearchParams<{ started_at?: string; ended_at?: string; active?: string }>();
   const timed = !!(params.started_at && params.ended_at);
   const activeSeconds = params.active ? Number(params.active) : null;
@@ -41,6 +41,15 @@ export default function PostSolve() {
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [mediaError, setMediaError] = useState<string | null>(null);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Unverified accounts post one of their challenge problems; that post is the proof
+  const [challenges, setChallenges] = useState<Problem[]>([]);
+
+  useEffect(() => {
+    if (verified || !link) return;
+    fetchChallengeProblems(link.challenge_slugs)
+      .then((rows) => setChallenges(rows.map((p) => ({ ...p, paid_only: false }))))
+      .catch(() => setChallenges([]));
+  }, [verified, link?.challenge_slugs.join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced search against the synced LeetCode problem list
   useEffect(() => {
@@ -96,7 +105,7 @@ export default function PostSolve() {
     if (retryTimer.current) clearTimeout(retryTimer.current);
     setStatus(attempt === 0 ? { kind: 'posting' } : { kind: 'waiting', message: 'Checking LeetCode again…', attempt });
     try {
-      const { solve } = await postSolve({
+      const { solve, verified_now } = await postSolve({
         problem_slug: picked.slug,
         ...(timed ? { started_at: params.started_at, ended_at: params.ended_at, active_seconds: activeSeconds ?? undefined } : {}),
         note: note.trim() || undefined,
@@ -109,6 +118,7 @@ export default function PostSolve() {
         }
       }
       await saveTimer(null);
+      if (verified_now) refreshProfile().catch(() => undefined);
       router.replace({
         pathname: '/celebrate',
         params: {
@@ -168,7 +178,32 @@ export default function PostSolve() {
 
           <SectionLabel>Problem</SectionLabel>
           <View style={{ zIndex: 5 }}>
-            {picked ? (
+            {!verified && !picked ? (
+              <View style={{ gap: 8 }}>
+                <View style={styles.verifyNote}>
+                  <BadgeCheck size={16} color={Colors.accent} />
+                  <T variant="bodySm" style={{ flex: 1 }} color={Colors.text}>
+                    Your first post verifies @{link?.leetcode_username}. Pick the one you solved:
+                  </T>
+                </View>
+                {challenges.map((p) => (
+                  <Pressable
+                    key={p.slug}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${p.frontend_id} ${p.title}, ${p.difficulty}`}
+                    onPress={() => setPicked(p)}
+                    style={({ pressed }) => [styles.challenge, pressed && { backgroundColor: Colors.surface2 }]}
+                  >
+                    <T variant="monoMedium" style={{ width: 44, fontSize: 12 }} color={Colors.text3}>#{p.frontend_id}</T>
+                    <T variant="medium" style={{ flex: 1, fontSize: 14 }} numberOfLines={1}>{p.title}</T>
+                    <DifficultyPill difficulty={p.difficulty} />
+                  </Pressable>
+                ))}
+                <Pressable accessibilityRole="link" onPress={() => router.push('/verify')} hitSlop={6}>
+                  <T variant="monoSm" color={Colors.text3}>// solved something else? other ways to verify →</T>
+                </Pressable>
+              </View>
+            ) : picked ? (
               <View style={styles.picked}>
                 <Check size={18} color={Colors.accent} strokeWidth={2.25} />
                 <T variant="monoMedium" color={Colors.text3}>#{picked.frontend_id}</T>
@@ -265,7 +300,7 @@ export default function PostSolve() {
 
           <View style={{ flex: 1, minHeight: 12 }} />
           <Button
-            title={status.kind === 'error' ? 'Try again' : timed ? 'Post solve · unlock home' : 'Post solve'}
+            title={status.kind === 'error' ? 'Try again' : !verified ? 'Post solve · verify' : timed ? 'Post solve · unlock home' : 'Post solve'}
             onPress={() => submit(0)}
             loading={busy}
             disabled={!picked}
@@ -290,5 +325,7 @@ const styles = StyleSheet.create({
   add: { backgroundColor: Colors.surface, borderStyle: 'dashed', gap: 8 },
   remove: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center' },
   dur: { position: 'absolute', left: 6, bottom: 6, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, backgroundColor: Colors.bg },
+  verifyNote: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: Radius.md, backgroundColor: Colors.accentTint, borderWidth: 1, borderColor: Colors.accentLine },
+  challenge: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14, borderRadius: Radius.md, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderStrong },
   notice: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 10, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
 });

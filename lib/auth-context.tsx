@@ -6,13 +6,16 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
-import { syncProfile } from './api';
+import { getLeetCodeLink, syncProfile } from './api';
 import { deviceTimezone } from './format';
-import { Profile } from '../types';
+import { LeetCodeLink, Profile } from '../types';
 
 WebBrowser.maybeCompleteAuthSession();
 
-// Where a signed-in person is in onboarding; the router follows this
+type OAuthProvider = 'google' | 'github';
+
+// Where a signed-in person is in onboarding; the router follows this.
+// Linked-but-unverified LeetCode accounts are "ready": the first post verifies them.
 export type AuthStatus = 'loading' | 'signedOut' | 'needsProfile' | 'needsLeetCode' | 'ready';
 
 interface AuthContextType {
@@ -20,8 +23,13 @@ interface AuthContextType {
   session: Session | null;
   userId: string | null;
   profile: Profile | null;
+  link: LeetCodeLink | null;
+  verified: boolean;
   signInWithApple: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithGitHub: () => Promise<void>;
+  // Adds GitHub to an existing account, so a LeetCode profile listing that GitHub verifies it
+  linkGitHub: () => Promise<boolean>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<{ needsConfirmation: boolean }>;
   signOut: () => Promise<void>;
@@ -33,6 +41,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [link, setLink] = useState<LeetCodeLink | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
   // Which user the current profile state belongs to, so a new session never reads a stale "no profile"
   const [profileFor, setProfileFor] = useState<string | null | undefined>(undefined);
@@ -40,8 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userId = session?.user.id ?? null;
 
   const loadProfile = useCallback(async (uid: string): Promise<Profile | null> => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+    const [{ data }, l] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', uid).maybeSingle(),
+      getLeetCodeLink().catch(() => null),
+    ]);
     setProfile(data);
+    setLink(l);
     setProfileFor(uid);
     return data;
   }, []);
@@ -60,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId) {
       setProfile(null);
+      setLink(null);
       setProfileFor(null);
       return;
     }
@@ -80,9 +94,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!sessionLoaded || (session && profileFor !== session.user.id)) return 'loading';
     if (!session) return 'signedOut';
     if (!profile) return 'needsProfile';
-    if (!profile.leetcode_username) return 'needsLeetCode';
+    if (!link) return 'needsLeetCode';
     return 'ready';
-  }, [sessionLoaded, session, profileFor, profile]);
+  }, [sessionLoaded, session, profileFor, profile, link]);
 
   const signInWithApple = useCallback(async () => {
     // Apple gets the hashed nonce, Supabase the raw one, so a stolen token can't be replayed
@@ -97,22 +111,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   }, []);
 
-  const signInWithGoogle = useCallback(async () => {
+  // Sign in with (or, with `link`, add) an OAuth provider. Returns false if the person backed out.
+  const oauth = useCallback(async (provider: OAuthProvider, addToAccount = false): Promise<boolean> => {
+    const name = provider === 'github' ? 'GitHub' : 'Google';
+    const start = addToAccount ? supabase.auth.linkIdentity.bind(supabase.auth) : supabase.auth.signInWithOAuth.bind(supabase.auth);
     if (Platform.OS === 'web') {
-      const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+      const { error } = await start({ provider, options: { redirectTo: window.location.origin } });
       if (error) throw error;
-      return;
+      return true;
     }
     const redirectTo = Linking.createURL('auth-callback');
-    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo, skipBrowserRedirect: true } });
+    const { data, error } = await start({ provider, options: { redirectTo, skipBrowserRedirect: true } });
     if (error) throw error;
+    if (!data.url) throw new Error(`${name} sign-in didn’t start. Try again.`);
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-    if (result.type !== 'success') return;
+    if (result.type !== 'success') return false;
     const code = new URL(result.url).searchParams.get('code');
-    if (!code) throw new Error('Google sign-in didn’t finish. Try again.');
+    if (!code) throw new Error(`${name} sign-in didn’t finish. Try again.`);
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
     if (exchangeError) throw exchangeError;
+    return true;
   }, []);
+
+  const signInWithGoogle = useCallback(async () => { await oauth('google'); }, [oauth]);
+  const signInWithGitHub = useCallback(async () => { await oauth('github'); }, [oauth]);
+  const linkGitHub = useCallback(() => oauth('github', true), [oauth]);
 
   const signInWithEmail = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
@@ -128,11 +151,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setProfile(null);
+    setLink(null);
   }, []);
 
   const value = useMemo(
-    () => ({ status, session, userId, profile, signInWithApple, signInWithGoogle, signInWithEmail, signUpWithEmail, signOut, refreshProfile }),
-    [status, session, userId, profile, signInWithApple, signInWithGoogle, signInWithEmail, signUpWithEmail, signOut, refreshProfile],
+    () => ({
+      status, session, userId, profile, link, verified: !!link?.verified_at,
+      signInWithApple, signInWithGoogle, signInWithGitHub, linkGitHub, signInWithEmail, signUpWithEmail, signOut, refreshProfile,
+    }),
+    [status, session, userId, profile, link, signInWithApple, signInWithGoogle, signInWithGitHub, linkGitHub, signInWithEmail, signUpWithEmail, signOut, refreshProfile],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

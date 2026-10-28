@@ -123,6 +123,16 @@ export interface FriendRow {
   direction: 'incoming' | 'outgoing';
 }
 
+export type ChallengeProblem = Pick<Problem, 'slug' | 'frontend_id' | 'title' | 'difficulty'>;
+
+// Your own link to a LeetCode account; unverified until a challenge post, GitHub or the bio code proves it
+export interface LeetCodeLink {
+  leetcode_username: string;
+  verify_code: string;
+  verified_at: string | null;
+  challenge_slugs: string[];
+}
+
 export interface LeetCodePreview {
   username: string;
   realName: string | null;
