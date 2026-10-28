@@ -69,6 +69,7 @@ export default function RootLayout() {
           <Stack.Screen name="(onboarding)" options={{ animation: 'fade' }} />
           <Stack.Screen name="timer" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', gestureEnabled: false }} />
           <Stack.Screen name="post" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+          <Stack.Screen name="celebrate" options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }} />
           <Stack.Screen name="media/[solveId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
           <Stack.Screen name="report" options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
         </Stack>
