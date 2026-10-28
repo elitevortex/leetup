@@ -132,3 +132,21 @@ export interface LeetCodePreview {
   medium: number;
   hard: number;
 }
+
+export interface Celebration {
+  difficulty: Difficulty;
+  points: number;
+  time_seconds: number | null;
+  first_today: boolean;
+  solves_today: number;
+  streak: number;
+  total_solves: number;
+  previous_best: number | null;
+  personal_best: boolean;
+  week_points: number;
+  rank_before: number;
+  rank_after: number;
+  board_size: number;
+  passed: string[];
+  friends_today: { id: string; display_name: string; avatar_url: string | null }[];
+}

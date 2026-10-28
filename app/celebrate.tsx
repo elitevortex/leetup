@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -13,167 +13,290 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { Flame } from 'lucide-react-native';
+import { Crown, Flame, LockOpen, Trophy, Zap } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../constants/theme';
-import { useAuth } from '../lib/auth-context';
-import { supabase } from '../lib/supabase';
-import { fetchTeasers } from '../lib/api';
+import { fetchCelebration } from '../lib/api';
 import { formatDuration } from '../lib/format';
-import { Button, Glow, Screen, T } from '../components/ui';
+import { Celebration, Difficulty } from '../types';
+import { Avatar, Button, T } from '../components/ui';
 
-// "Accepted": the post-solve celebration. A terminal types the post command, the testcases
-// pass one by one, the verdict lands, then your stats and the unlock. Tap anywhere to skip.
+// "Takeover": a green flood with a burst of code glyphs, a hard cut to black, "Accepted" with two
+// ribbons drawing across, then the payoff. The first solve of the day pays off with the unlock;
+// later solves pay off with one progress highlight. Tap anywhere to skip to the end.
 
-const TESTCASES = 22;
-const TYPE_MS = 28;
+const CUT_MS = 950;
+const GLYPHS = ['{ }', '</>', '>_', '( )', '[ ]', ';', '=>', 'O(1)', '&&', '++', '#', '//'];
+const BURST: Record<Difficulty, number> = { Easy: 10, Medium: 16, Hard: 24 };
+const MILESTONES = new Set([10, 25, 50, 100, 250, 500, 1000]);
 
-function haptic(kind: 'tick' | 'success') {
+function haptic(kind: 'heavy' | 'success' | 'light') {
   if (Platform.OS === 'web') return;
-  if (kind === 'tick') Haptics.selectionAsync().catch(() => undefined);
+  if (kind === 'heavy') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => undefined);
+  else if (kind === 'light') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
   else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
 }
 
-function Testcase({ index, progress }: { index: number; progress: SharedValue<number> }) {
-  const style = useAnimatedStyle(() => {
-    const on = interpolate(progress.value, [index, index + 1], [0, 1], 'clamp');
-    return {
-      opacity: 0.25 + on * 0.75,
-      transform: [{ scale: 0.6 + on * 0.4 }],
-      backgroundColor: on > 0.5 ? Colors.accent : Colors.surface2,
-    };
-  });
-  return <Animated.View style={[styles.testcase, style]} />;
+function ordinal(n: number) {
+  const r100 = n % 100;
+  if (r100 >= 11 && r100 <= 13) return `${n}th`;
+  const r10 = n % 10;
+  return `${n}${r10 === 1 ? 'st' : r10 === 2 ? 'nd' : r10 === 3 ? 'rd' : 'th'}`;
 }
 
-export default function Celebrate() {
-  const { userId } = useAuth();
-  const reduced = useReducedMotion();
-  const params = useLocalSearchParams<{ num?: string; title?: string; difficulty?: string; time?: string; points?: string }>();
-  const command = `leetup post ${params.num ?? ''}`.trim();
+function Glyph({ char, angle, radius, size, burst }: { char: string; angle: number; radius: number; size: number; burst: SharedValue<number> }) {
+  const style = useAnimatedStyle(() => {
+    const p = burst.value;
+    const out = 1 - Math.pow(1 - p, 3);
+    return {
+      opacity: interpolate(p, [0, 0.12, 0.8, 1], [0, 1, 1, 0.6]),
+      transform: [
+        { translateX: Math.cos(angle + p * 0.9) * radius * out },
+        { translateY: Math.sin(angle + p * 0.9) * radius * out },
+        { rotate: `${(angle + p * 1.6) * 57.3}deg` },
+        { scale: 0.6 + out * 0.6 },
+      ],
+    };
+  });
+  return (
+    <Animated.Text style={[styles.glyph, { fontSize: size }, style]} accessibilityElementsHidden>
+      {char}
+    </Animated.Text>
+  );
+}
 
-  const [typed, setTyped] = useState(reduced ? command.length : 0);
-  const [streak, setStreak] = useState<number | null>(null);
-  const [friends, setFriends] = useState(0);
-  const cases = useSharedValue(reduced ? TESTCASES : 0);
-  const verdict = useSharedValue(reduced ? 1 : 0);
-  const stats = useSharedValue(reduced ? 1 : 0);
+// Old number rolls up and out, new number rolls in
+function Odometer({ from, to, progress }: { from: number; to: number; progress: SharedValue<number> }) {
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: -progress.value * 30 }] }));
+  return (
+    <View style={{ height: 30, overflow: 'hidden' }}>
+      <Animated.View style={style}>
+        <T style={styles.odo}>{from}</T>
+        <T style={styles.odo}>{to}</T>
+      </Animated.View>
+    </View>
+  );
+}
+
+function PopIn({ index, progress, children }: { index: number; progress: SharedValue<number>; children: React.ReactNode }) {
+  const style = useAnimatedStyle(() => {
+    const p = interpolate(progress.value, [index * 0.12, index * 0.12 + 0.4], [0, 1], 'clamp');
+    return { opacity: p, transform: [{ scale: 0.4 + p * 0.6 }] };
+  });
+  return <Animated.View style={[{ marginLeft: index === 0 ? 0 : -8 }, style]}>{children}</Animated.View>;
+}
+
+function highlight(c: Celebration): { icon: 'trophy' | 'crown' | 'zap' | 'flame'; title: string; body: string } {
+  if (MILESTONES.has(c.total_solves)) return { icon: 'trophy', title: `${ordinal(c.total_solves)} solve`, body: 'a milestone. keep stacking.' };
+  if (c.passed.length > 0) {
+    const others = c.passed.length > 1 ? ` +${c.passed.length - 1}` : '';
+    return { icon: 'crown', title: `you passed ${c.passed[0]}${others}`, body: `#${c.rank_after} of ${c.board_size} this week` };
+  }
+  if (c.personal_best && c.time_seconds != null && c.previous_best != null) {
+    return { icon: 'zap', title: `fastest ${c.difficulty.toLowerCase()} yet`, body: `beat your ${formatDuration(c.previous_best)} by ${formatDuration(c.previous_best - c.time_seconds)}` };
+  }
+  return { icon: 'flame', title: `solve #${c.solves_today} today`, body: `${c.week_points} pts this week · #${c.rank_after} of ${c.board_size}` };
+}
+
+const ICONS = { trophy: Trophy, crown: Crown, zap: Zap, flame: Flame };
+
+export default function Celebrate() {
+  const reduced = useReducedMotion();
+  const { width, height } = useWindowDimensions();
+  const params = useLocalSearchParams<{ solveId?: string; num?: string; title?: string; difficulty?: Difficulty; points?: string }>();
+  const difficulty: Difficulty = params.difficulty ?? 'Medium';
+  const [data, setData] = useState<Celebration | null>(null);
+  const [done, setDone] = useState(reduced);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const flood = useSharedValue(reduced ? 1 : 0);
+  const burst = useSharedValue(reduced ? 1 : 0);
+  const cut = useSharedValue(reduced ? 1 : 0);
+  const title = useSharedValue(reduced ? 1 : 0);
+  const ribbons = useSharedValue(reduced ? 1 : 0);
+  const payoff = useSharedValue(reduced ? 1 : 0);
+  const extras = useSharedValue(reduced ? 1 : 0);
 
   useEffect(() => {
-    if (!userId) return;
-    supabase.rpc('leetup_streak', { uid: userId }).then(({ data }) => setStreak(typeof data === 'number' ? data : null));
-    fetchTeasers().then((t) => setFriends(new Set(t.filter((x) => x.user_id !== userId).map((x) => x.user_id)).size)).catch(() => undefined);
-  }, [userId]);
+    if (params.solveId) fetchCelebration(params.solveId).then(setData).catch(() => undefined);
+  }, [params.solveId]);
 
   useEffect(() => {
     if (reduced) {
       haptic('success');
       return;
     }
-    // 1. type the command, 2. testcases fill, 3. verdict springs in, 4. stats rise
-    const typing = setInterval(() => setTyped((n) => (n >= command.length ? n : n + 1)), TYPE_MS);
-    const typeDone = command.length * TYPE_MS + 150;
-    cases.value = withDelay(typeDone, withTiming(TESTCASES, { duration: 650, easing: Easing.linear }));
-    const ticks = setInterval(() => haptic('tick'), 90);
-    const stopTicks = setTimeout(() => clearInterval(ticks), typeDone + 650);
-    verdict.value = withDelay(typeDone + 700, withSpring(1, { damping: 12, stiffness: 140 }));
-    stats.value = withDelay(typeDone + 1100, withTiming(1, { duration: 450, easing: Easing.out(Easing.cubic) }));
-    const success = setTimeout(() => haptic('success'), typeDone + 700);
-    return () => {
-      clearInterval(typing);
-      clearInterval(ticks);
-      clearTimeout(stopTicks);
-      clearTimeout(success);
-    };
+    haptic('heavy');
+    flood.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
+    burst.value = withDelay(80, withTiming(1, { duration: 900, easing: Easing.out(Easing.quad) }));
+    cut.value = withDelay(CUT_MS, withTiming(1, { duration: 0 }));
+    title.value = withDelay(CUT_MS + 40, withSpring(1, { damping: 14, stiffness: 160 }));
+    ribbons.value = withDelay(CUT_MS + 120, withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) }));
+    payoff.value = withDelay(CUT_MS + 520, withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }));
+    extras.value = withDelay(CUT_MS + 820, withTiming(1, { duration: 900 }));
+    timers.current = [
+      setTimeout(() => haptic('success'), CUT_MS),
+      setTimeout(() => haptic('light'), CUT_MS + 900),
+      setTimeout(() => setDone(true), CUT_MS + 900),
+    ];
+    return () => timers.current.forEach(clearTimeout);
   }, [reduced]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const skip = () => {
-    setTyped(command.length);
-    cases.value = TESTCASES;
-    verdict.value = 1;
-    stats.value = 1;
+    if (done) return;
+    timers.current.forEach(clearTimeout);
+    [flood, burst, cut, title, ribbons, payoff, extras].forEach((v) => (v.value = 1));
+    setDone(true);
   };
 
-  const verdictStyle = useAnimatedStyle(() => ({
-    opacity: verdict.value,
-    transform: [{ scale: interpolate(verdict.value, [0, 1], [1.35, 1]) }],
+  const diameter = Math.hypot(width, height) * 1.15;
+  const floodStyle = useAnimatedStyle(() => ({
+    opacity: cut.value ? 0 : 1,
+    transform: [{ scale: flood.value }],
   }));
-  const statsStyle = useAnimatedStyle(() => ({
-    opacity: stats.value,
-    transform: [{ translateY: interpolate(stats.value, [0, 1], [24, 0]) }],
+  const floodContent = useAnimatedStyle(() => ({ opacity: cut.value ? 0 : 1 }));
+  const pointsStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(burst.value, [0, 0.15, 1], [0, 1, 1]),
+    transform: [{ scale: interpolate(burst.value, [0, 0.25, 1], [0.4, 1.08, 1]) }],
   }));
+  const titleStyle = useAnimatedStyle(() => ({
+    opacity: title.value,
+    letterSpacing: interpolate(title.value, [0, 1], [6, -2]),
+    transform: [{ translateY: interpolate(title.value, [0, 1], [30, 0]) }],
+  }));
+  const ribbonA = useAnimatedStyle(() => ({ transform: [{ rotate: '-7deg' }, { scaleX: ribbons.value }] }));
+  const ribbonB = useAnimatedStyle(() => ({ transform: [{ rotate: '5deg' }, { scaleX: interpolate(ribbons.value, [0.25, 1], [0, 1], 'clamp') }] }));
+  const payoffStyle = useAnimatedStyle(() => ({ opacity: payoff.value, transform: [{ translateY: interpolate(payoff.value, [0, 1], [24, 0]) }] }));
+
+  const glyphs = useMemo(() => {
+    const n = BURST[difficulty];
+    return Array.from({ length: n }).map((_, i) => ({
+      char: GLYPHS[i % GLYPHS.length],
+      angle: (i / n) * Math.PI * 2 + (i % 3) * 0.3,
+      radius: Math.min(width, height) * (0.32 + (i % 4) * 0.07),
+      size: 18 + (i % 3) * 8,
+    }));
+  }, [difficulty, width, height]);
 
   const goHome = () => {
     router.dismissAll();
     router.replace('/(tabs)');
   };
 
+  const pts = params.points ?? (data ? `+${data.points}` : '');
+  const h = data && !data.first_today ? highlight(data) : null;
+  const HIcon = h ? ICONS[h.icon] : null;
+
   return (
-    <Screen edges={['top', 'bottom']}>
-      <Pressable style={{ flex: 1 }} onPress={skip} accessibilityLabel="Accepted. Your solve is posted." accessible={false}>
-        <Glow size={420} style={{ top: 120 }} />
-        <View style={styles.body}>
-          <View style={styles.terminal}>
-            <T style={styles.prompt}>
-              <T style={styles.prompt} color={Colors.accent}>~/ </T>
-              {command.slice(0, typed)}
-              {typed < command.length ? <T color={Colors.accent}>█</T> : null}
-            </T>
-            <View style={styles.cases} accessibilityElementsHidden>
-              {Array.from({ length: TESTCASES }).map((_, i) => (
-                <Testcase key={i} index={i} progress={cases} />
-              ))}
+    <View style={styles.root}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={skip} accessible={false} />
+
+      {/* Takeover */}
+      <Animated.View pointerEvents="none" style={[styles.flood, { width: diameter, height: diameter, borderRadius: diameter / 2, left: (width - diameter) / 2, top: (height - diameter) / 2 }, floodStyle]} />
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center, floodContent]}>
+        {glyphs.map((g, i) => (
+          <Glyph key={i} {...g} burst={burst} />
+        ))}
+        <Animated.View style={pointsStyle}>
+          <T style={styles.bigPoints} color={Colors.accentInk}>{pts}</T>
+        </Animated.View>
+      </Animated.View>
+
+      {/* After the cut */}
+      <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, styles.after]}>
+        <View style={{ alignItems: 'center', justifyContent: 'center', height: 150 }}>
+          <Animated.View style={[styles.ribbon, { width: width * 0.86, top: 40 }, ribbonA]} />
+          <Animated.View style={[styles.ribbon, styles.ribbonB, { width: width * 0.62, top: 86 }, ribbonB]} />
+          <Animated.Text style={[styles.title, titleStyle]} accessibilityRole="header">Accepted</Animated.Text>
+        </View>
+
+        <Animated.View style={[{ alignSelf: 'stretch', gap: 16 }, payoffStyle]} pointerEvents={done ? 'auto' : 'none'}>
+          <T variant="medium" style={{ textAlign: 'center', fontSize: 16 }}>
+            #{params.num} {params.title}
+          </T>
+          <View style={styles.stats}>
+            <View style={styles.stat}>
+              <T variant="bigStat">{data?.time_seconds != null ? formatDuration(data.time_seconds) : 'untimed'}</T>
+              <T variant="label">time</T>
             </View>
-            <T variant="monoSm">{`${TESTCASES} / ${TESTCASES} testcases passed`}</T>
+            <View style={styles.stat}>
+              <T variant="bigStat" color={Colors.accent}>{pts}</T>
+              <T variant="label">points</T>
+            </View>
+            <View style={styles.stat}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {data?.first_today && data.streak > 0 ? <Odometer from={data.streak - 1} to={data.streak} progress={extras} /> : <T variant="bigStat">{data?.streak ?? '–'}</T>}
+                <Flame size={18} color={Colors.medium} />
+              </View>
+              <T variant="label">day streak</T>
+            </View>
           </View>
 
-          <Animated.View style={[{ alignItems: 'center', gap: 6 }, verdictStyle]}>
-            <T style={styles.verdict} color={Colors.accent} accessibilityRole="header">Accepted</T>
-            <T variant="medium" style={{ textAlign: 'center' }}>
-              #{params.num} {params.title}
-            </T>
-          </Animated.View>
-
-          <Animated.View style={[{ gap: 14, alignSelf: 'stretch' }, statsStyle]}>
-            <View style={styles.stats}>
-              <View style={styles.stat}>
-                <T variant="bigStat">{params.time ? formatDuration(Number(params.time)) : '—'}</T>
-                <T variant="label">time</T>
+          {data?.first_today ? (
+            <View style={[styles.payoffCard, styles.unlockCard]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <LockOpen size={16} color={Colors.accent} />
+                <T style={{ fontFamily: Fonts.monoSemiBold, fontSize: 12, letterSpacing: 1 }} color={Colors.accent}>HOME UNLOCKED</T>
               </View>
-              <View style={styles.stat}>
-                <T variant="bigStat" color={Colors.accent}>{params.points ?? '+0'}</T>
-                <T variant="label">points</T>
-              </View>
-              <View style={styles.stat}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <T variant="bigStat">{streak ?? '–'}</T>
-                  <Flame size={18} color={Colors.medium} />
+              {data.friends_today.length ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ flexDirection: 'row' }}>
+                    {data.friends_today.slice(0, 5).map((f, i) => (
+                      <PopIn key={f.id} index={i} progress={extras}>
+                        <View style={{ borderRadius: 18, borderWidth: 2, borderColor: Colors.bg }}>
+                          <Avatar name={f.display_name} url={f.avatar_url} size={32} />
+                        </View>
+                      </PopIn>
+                    ))}
+                  </View>
+                  <T variant="name" style={{ flex: 1 }}>
+                    {data.friends_today.length} {data.friends_today.length === 1 ? 'friend' : 'friends'} solved today
+                  </T>
                 </View>
-                <T variant="label">day streak</T>
+              ) : (
+                <T variant="name">you’re first today. they’ll see yours.</T>
+              )}
+            </View>
+          ) : h && HIcon ? (
+            <View style={styles.payoffCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={styles.hIcon}>
+                  <HIcon size={20} color={h.icon === 'flame' ? Colors.medium : Colors.accent} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <T variant="name" style={{ fontSize: 17 }}>{h.title}</T>
+                  <T variant="monoSm">{h.body}</T>
+                </View>
               </View>
             </View>
-            <View style={styles.unlock}>
-              <T variant="monoMedium" style={{ fontSize: 12, textAlign: 'center' }}>
-                {friends > 0
-                  ? `home unlocked · ${friends} ${friends === 1 ? 'friend' : 'friends'} solved today`
-                  : 'home unlocked · you’re first today'}
-              </T>
-            </View>
-            <Button title="See today’s solves →" onPress={goHome} />
-          </Animated.View>
-        </View>
-      </Pressable>
-    </Screen>
+          ) : (
+            <View style={{ height: 76 }} />
+          )}
+
+          {data?.first_today ? (
+            <Button title={data.friends_today.length ? 'See what they solved →' : 'Go to home →'} pill onPress={goHome} style={{ alignSelf: 'stretch' }} />
+          ) : (
+            <Button title="Back to feed" variant="secondary" onPress={goHome} />
+          )}
+        </Animated.View>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  body: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 32, paddingHorizontal: 24 },
-  terminal: { alignSelf: 'stretch', gap: 14, padding: 16, borderRadius: Radius.lg, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
-  prompt: { fontFamily: Fonts.monoMedium, fontSize: 15, color: Colors.text },
-  cases: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  testcase: { width: 18, height: 18, borderRadius: 4 },
-  verdict: { fontFamily: Fonts.monoBold, fontSize: 52, lineHeight: 62, letterSpacing: -2 },
+  root: { flex: 1, backgroundColor: Colors.bg, overflow: 'hidden' },
+  flood: { position: 'absolute', backgroundColor: Colors.accent },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  glyph: { position: 'absolute', fontFamily: Fonts.monoBold, color: Colors.accentInk },
+  bigPoints: { fontFamily: Fonts.monoBold, fontSize: 96, lineHeight: 110, letterSpacing: -5 },
+  after: { justifyContent: 'center', alignItems: 'center', gap: 28, paddingHorizontal: 24 },
+  title: { fontFamily: Fonts.monoBold, fontSize: 56, lineHeight: 66, color: Colors.text },
+  ribbon: { position: 'absolute', height: 46, borderRadius: 23, backgroundColor: Colors.accent, opacity: 0.9, transformOrigin: 'left' },
+  ribbonB: { height: 30, borderRadius: 15, opacity: 0.55 },
   stats: { flexDirection: 'row', gap: 8 },
   stat: { flex: 1, gap: 6, padding: 14, borderRadius: 14, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
-  unlock: { padding: 12, borderRadius: Radius.md, backgroundColor: Colors.accentTint, borderWidth: 1, borderColor: Colors.accentLine },
+  odo: { fontFamily: Fonts.monoSemiBold, fontSize: 24, lineHeight: 30, letterSpacing: -1, color: Colors.text },
+  payoffCard: { gap: 12, padding: 16, borderRadius: Radius.lg, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
+  unlockCard: { backgroundColor: Colors.accentTint, borderColor: Colors.accentLine },
+  hIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface2, borderWidth: 1, borderColor: Colors.borderStrong },
 });
