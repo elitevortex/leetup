@@ -68,6 +68,14 @@ serve(async (req, body) => {
     .sort((a, b) => a.timestamp - b.timestamp)[0];
 
   if (!match) {
+    // An account with solves but no visible submissions has them set to private on LeetCode
+    if (accepted.length === 0) {
+      const lcProfile = await fetchProfile(link.leetcode_username).catch(() => null);
+      if (lcProfile && lcProfile.easy + lcProfile.medium + lcProfile.hard > 0) {
+        return fail(422, 'submissions_hidden',
+          'LeetCode isn’t showing your submissions, so we can’t check this one. If you’ve made them private, turn them public in your LeetCode settings, then try again.');
+      }
+    }
     if (verifying && accepted.some((s) => s.titleSlug === slug && s.timestamp * 1000 >= windowFrom && s.timestamp * 1000 < claimedFrom)) {
       return fail(422, 'before_link', `That ${problem.title} submission is from before you connected LeetUp. Post one you submit from now on.`);
     }
