@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import { fetchTeasers } from '../lib/api';
 import { formatDuration } from '../lib/format';
 import { activeMs, loadTimer, saveTimer, TimerState } from '../lib/timer';
-import { Screen, T } from '../components/ui';
+import { Glow, Screen, T } from '../components/ui';
 
 function tap() {
   if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
@@ -134,7 +134,7 @@ export default function TimerScreen() {
 
   return (
     <Screen edges={['top', 'bottom']}>
-      <View pointerEvents="none" style={styles.glowBlob} />
+      <Glow size={380} style={{ bottom: -90 }} />
       <View style={styles.top}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close timer" onPress={() => router.back()} style={styles.close} hitSlop={6}>
           <ChevronDown size={20} color={Colors.text2} />
@@ -223,5 +223,4 @@ const styles = StyleSheet.create({
   hair: { height: 1, backgroundColor: Colors.border },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 36 },
   glow: { shadowColor: Colors.accent, shadowOpacity: 0.4, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 10 },
-  glowBlob: { position: 'absolute', alignSelf: 'center', bottom: -40, width: 300, height: 300, borderRadius: 150, backgroundColor: Colors.glow },
 });

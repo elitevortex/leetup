@@ -207,9 +207,9 @@ export default function PostSolve() {
             {picked ? <DifficultyPill difficulty={picked.difficulty} /> : <T variant="monoSm" style={{ fontSize: 11 }}>pick a problem first</T>}
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{ flex: 1 }}><SectionLabel>Language · auto</SectionLabel></View>
+            <View style={{ flex: 1 }}><SectionLabel>Lang · auto</SectionLabel></View>
             <Code size={14} color={Colors.syntaxBlue} />
-            <T variant="monoSm" style={{ fontSize: 11 }}>from your Accepted submission</T>
+            <T variant="monoSm" style={{ fontSize: 11 }}>from your submission</T>
           </View>
 
           <SectionLabel right={<T variant="monoSm">{media.length} / {MAX_MEDIA}</T>}>Media (optional)</SectionLabel>

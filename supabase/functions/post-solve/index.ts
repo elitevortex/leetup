@@ -62,7 +62,7 @@ serve(async (req, body) => {
     .sort((a, b) => a.timestamp - b.timestamp)[0];
 
   if (!match) {
-    return fail(404, 'no_accepted_submission',
+    return fail(422, 'no_accepted_submission',
       `We couldn’t find an Accepted submission for ${problem.title} ${timed ? 'during your timer' : 'in the last 24 hours'}. ` +
       'If you just submitted, wait a few seconds and try again.');
   }

@@ -34,14 +34,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
-  const [profileLoaded, setProfileLoaded] = useState(false);
+  // Which user the current profile state belongs to, so a new session never reads a stale "no profile"
+  const [profileFor, setProfileFor] = useState<string | null | undefined>(undefined);
 
   const userId = session?.user.id ?? null;
 
   const loadProfile = useCallback(async (uid: string): Promise<Profile | null> => {
     const { data } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
     setProfile(data);
-    setProfileLoaded(true);
+    setProfileFor(uid);
     return data;
   }, []);
 
@@ -59,10 +60,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId) {
       setProfile(null);
-      setProfileLoaded(true);
+      setProfileFor(null);
       return;
     }
-    setProfileLoaded(false);
     loadProfile(userId);
   }, [userId, loadProfile]);
 
@@ -77,12 +77,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [profile?.id, profile?.leetcode_username]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const status: AuthStatus = useMemo(() => {
-    if (!sessionLoaded || (session && !profileLoaded)) return 'loading';
+    if (!sessionLoaded || (session && profileFor !== session.user.id)) return 'loading';
     if (!session) return 'signedOut';
     if (!profile) return 'needsProfile';
     if (!profile.leetcode_username) return 'needsLeetCode';
     return 'ready';
-  }, [sessionLoaded, session, profileLoaded, profile]);
+  }, [sessionLoaded, session, profileFor, profile]);
 
   const signInWithApple = useCallback(async () => {
     // Apple gets the hashed nonce, Supabase the raw one, so a stolen token can't be replayed

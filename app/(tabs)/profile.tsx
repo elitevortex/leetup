@@ -1,6 +1,23 @@
-import { Screen, TabHeader } from '../../components/ui';
+import { router } from 'expo-router';
+import { SlidersHorizontal } from 'lucide-react-native';
+import { Colors } from '../../constants/theme';
+import { useAuth } from '../../lib/auth-context';
+import { IconButton, Loading, Screen, TabHeader } from '../../components/ui';
+import { ProfileView } from '../../components/ProfileView';
 
-// Placeholder until this tab is built
-export default function Placeholder() {
-  return <Screen><TabHeader title="Uprofile" /></Screen>;
+export default function ProfileTab() {
+  const { profile } = useAuth();
+  return (
+    <Screen>
+      <TabHeader
+        title="Profile"
+        right={
+          <IconButton label="Settings" onPress={() => router.push('/settings')}>
+            <SlidersHorizontal size={20} color={Colors.text} />
+          </IconButton>
+        }
+      />
+      {profile ? <ProfileView username={profile.username} /> : <Loading />}
+    </Screen>
+  );
 }

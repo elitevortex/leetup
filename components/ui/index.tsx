@@ -1,16 +1,19 @@
 import React, { forwardRef, ReactNode, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   PressableProps,
   StyleProp,
   StyleSheet,
   TextInput,
   TextInputProps,
+  TextStyle,
   View,
   ViewStyle,
 } from 'react-native';
 import { Image } from 'expo-image';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -78,6 +81,24 @@ export function Divider() {
   return <View style={{ height: StyleSheet.hairlineWidth * 2, backgroundColor: Colors.border }} />;
 }
 
+// Soft accent glow behind hero content
+export function Glow({ size = 340, style }: { size?: number; style?: StyleProp<ViewStyle> }) {
+  return (
+    <View pointerEvents="none" style={[{ position: 'absolute', width: size, height: size, alignSelf: 'center' }, style]}>
+      <Svg width={size} height={size}>
+        <Defs>
+          <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
+            <Stop offset="0" stopColor={Colors.accent} stopOpacity={0.22} />
+            <Stop offset="0.55" stopColor={Colors.accent} stopOpacity={0.07} />
+            <Stop offset="1" stopColor={Colors.accent} stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Circle cx={size / 2} cy={size / 2} r={size / 2} fill="url(#glow)" />
+      </Svg>
+    </View>
+  );
+}
+
 // ---------- Controls ----------
 
 export function IconButton({ label, children, onPress, style, size = 38 }: { label: string; children: ReactNode; onPress?: () => void; style?: StyleProp<ViewStyle>; size?: number }) {
@@ -115,8 +136,10 @@ export function Button({
   disabled,
   pill,
   style,
+  textColor,
 }: {
   title: string;
+  textColor?: string;
   onPress?: () => void;
   variant?: ButtonVariant;
   icon?: (color: string) => ReactNode;
@@ -151,17 +174,19 @@ export function Button({
         style,
       ]}
     >
-      {loading ? <ActivityIndicator color={c.fg} /> : icon?.(c.fg)}
-      <T variant="button" color={c.fg}>{title}</T>
+      {loading ? <ActivityIndicator color={textColor ?? c.fg} /> : icon?.(textColor ?? c.fg)}
+      <T variant="button" color={textColor ?? c.fg}>{title}</T>
     </Pressable>
   );
 }
 
-export function SmallButton({ title, onPress, variant = 'secondary', disabled }: { title: string; onPress?: () => void; variant?: 'primary' | 'secondary'; disabled?: boolean }) {
+export function SmallButton({ title, onPress, variant = 'secondary', disabled, accessibilityLabel }: { title: string; onPress?: () => void; variant?: 'primary' | 'secondary'; disabled?: boolean; accessibilityLabel?: string }) {
   const primary = variant === 'primary';
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? title}
+      accessibilityState={{ disabled: !!disabled }}
       onPress={disabled ? undefined : onPress}
       style={({ pressed }) => ({
         paddingVertical: 8,
@@ -191,7 +216,7 @@ export const Input = forwardRef<TextInput, TextInputProps & { prompt?: boolean; 
           selectionColor={Colors.accent}
           onFocus={(e) => { setFocused(true); onFocus?.(e); }}
           onBlur={(e) => { setFocused(false); onBlur?.(e); }}
-          style={[{ flex: 1, fontFamily: Fonts.sans, fontSize: 15, color: Colors.text, paddingVertical: 0, minHeight: 20 }, style]}
+          style={[{ flex: 1, fontFamily: Fonts.sans, fontSize: 15, color: Colors.text, paddingVertical: 0, minHeight: 20 }, WEB_NO_OUTLINE, style]}
           {...rest}
         />
         {right}
@@ -314,10 +339,11 @@ export function Loading() {
 }
 
 // Row inside a settings-style group
-export function GroupRow({ icon, label, detail, onPress, danger, last }: { icon?: ReactNode; label: string; detail?: ReactNode; onPress?: () => void; danger?: boolean; last?: boolean }) {
+export function GroupRow({ icon, label, detail, onPress, danger, last, accessibilityLabel }: { icon?: ReactNode; label: string; detail?: ReactNode; onPress?: () => void; danger?: boolean; last?: boolean; accessibilityLabel?: string }) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
       style={({ pressed }) => ({
         flexDirection: 'row',
@@ -340,6 +366,9 @@ export function GroupRow({ icon, label, detail, onPress, danger, last }: { icon?
 export function Group({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return <View style={[{ borderRadius: Radius.lg, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }, style]}>{children}</View>;
 }
+
+// The container's border already shows focus; drop the browser's own outline on web
+const WEB_NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
 
 const styles = StyleSheet.create({
   navHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10 },
