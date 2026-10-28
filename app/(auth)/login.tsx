@@ -20,7 +20,7 @@ function BrandIcon({ d, color, size }: { d: string; color: string; size: number 
   );
 }
 
-const STEPS = ['Sign in (GitHub verifies you instantly if it’s on your LeetCode)', 'Enter your LeetCode username', 'Post your first solve: that’s your proof'];
+const STEPS = ['Sign in', 'Enter your LeetCode username', 'Look around: day one is fully open'];
 
 export default function Login() {
   const { signInWithApple, signInWithGoogle, signInWithGitHub } = useAuth();

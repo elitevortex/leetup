@@ -6,7 +6,7 @@ import { ChevronDown, Lock, Pause, Play, Square, X } from 'lucide-react-native';
 import { Colors, Fonts } from '../constants/theme';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
-import { fetchTeasers } from '../lib/api';
+import { fetchFeedState, fetchTeasers } from '../lib/api';
 import { formatDuration } from '../lib/format';
 import { activeMs, loadTimer, saveTimer, TimerState } from '../lib/timer';
 import { Glow, Screen, T } from '../components/ui';
@@ -61,6 +61,7 @@ export default function TimerScreen() {
   const [avg, setAvg] = useState<number | null>(null);
   const [streak, setStreak] = useState(0);
   const [friendsToday, setFriendsToday] = useState(0);
+  const [locked, setLocked] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const discardTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -73,11 +74,13 @@ export default function TimerScreen() {
     (async () => {
       const midnight = new Date();
       midnight.setHours(0, 0, 0, 0);
-      const [{ data: mine }, { data: streakValue }, teasers] = await Promise.all([
+      const [{ data: mine }, { data: streakValue }, teasers, state] = await Promise.all([
         supabase.from('solves').select('time_seconds, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(30),
         supabase.rpc('leetup_streak', { uid: userId }),
         fetchTeasers().catch(() => []),
+        fetchFeedState().catch(() => null),
       ]);
+      setLocked(state ? !state.unlocked : false);
       const rows = mine ?? [];
       setSolvesToday(rows.filter((r) => new Date(r.created_at) >= midnight).length);
       const timed = rows.map((r) => r.time_seconds).filter((t): t is number => t != null);
@@ -145,7 +148,7 @@ export default function TimerScreen() {
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.hard, opacity: timer.pausedAt ? 0.4 : 1 }} />
               <T style={{ fontFamily: Fonts.monoSemiBold, fontSize: 11, letterSpacing: 1.1 }} color={Colors.hard}>{timer.pausedAt ? 'PAUSED' : 'REC'}</T>
             </View>
-          ) : solvesToday === 0 ? (
+          ) : locked && solvesToday === 0 ? (
             <View style={[styles.chip, { backgroundColor: Colors.accentTint, borderColor: Colors.accentLine }]}>
               <Lock size={12} color={Colors.accent} strokeWidth={2.4} />
               <T variant="monoMedium" style={{ fontSize: 11 }}>home locked · {friendsToday} solved today</T>

@@ -5,9 +5,9 @@ import { supabase } from './supabase';
 import {
   AppNotification,
   Celebration,
-  ChallengeProblem,
   Comment,
   FeedSolve,
+  FeedState,
   FriendRow,
   LeaderboardRow,
   LeetCodeLink,
@@ -52,25 +52,15 @@ async function callFunction<T>(name: string, body: Record<string, unknown> = {})
 
 // Links straight away; `verified` is true when the LeetCode profile lists the GitHub account you signed in with
 export function startLeetCodeLink(username: string) {
-  return callFunction<{ preview: LeetCodePreview; verified: boolean; challenges: ChallengeProblem[] }>('leetcode-link', { action: 'start', username });
-}
-
-export function rerollChallenges() {
-  return callFunction<{ challenges: ChallengeProblem[] }>('leetcode-link', { action: 'challenge' });
+  return callFunction<{ preview: LeetCodePreview; verified: boolean; contested: boolean }>('leetcode-link', { action: 'start', username });
 }
 
 export function verifyLeetCodeLink() {
-  return callFunction<{ verified: boolean; method?: 'github' | 'bio' | 'solve' }>('leetcode-link', { action: 'verify' });
-}
-
-export async function fetchChallengeProblems(slugs: string[]): Promise<ChallengeProblem[]> {
-  if (slugs.length === 0) return [];
-  const rows = check(await supabase.from('problems').select('slug, frontend_id, title, difficulty').in('slug', slugs)) as ChallengeProblem[];
-  return slugs.map((s) => rows.find((p) => p.slug === s)).filter((p): p is ChallengeProblem => !!p);
+  return callFunction<{ verified: boolean; method?: 'github' | 'bio' }>('leetcode-link', { action: 'verify' });
 }
 
 export async function getLeetCodeLink(): Promise<LeetCodeLink | null> {
-  return check(await supabase.from('leetcode_links').select('leetcode_username, verify_code, verified_at, challenge_slugs').maybeSingle());
+  return check(await supabase.from('leetcode_links').select('leetcode_username, verify_code, verified_at').maybeSingle());
 }
 
 export function syncProfile(force = false) {
@@ -180,6 +170,10 @@ export async function fetchUserSolves(targetId: string, viewerId: string, limit 
 
 export async function fetchTeasers(): Promise<Teaser[]> {
   return check(await supabase.rpc('todays_feed_teasers'));
+}
+
+export async function fetchFeedState(): Promise<FeedState> {
+  return check(await supabase.rpc('my_feed_state'));
 }
 
 export async function hasPostedToday(userId: string): Promise<boolean> {

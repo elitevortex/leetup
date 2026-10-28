@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
-import { BadgeCheck, Check, ChevronDown, Copy, ExternalLink, RefreshCw, Timer } from 'lucide-react-native';
+import { BadgeCheck, Check, ChevronDown, Copy, Timer } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../constants/theme';
 import { useAuth } from '../lib/auth-context';
-import { ApiError, fetchChallengeProblems, rerollChallenges, verifyLeetCodeLink } from '../lib/api';
-import { ChallengeProblem } from '../types';
-import { Button, DifficultyPill, Group, Loading, NavHeader, Screen, SectionLabel, T } from '../components/ui';
+import { ApiError, verifyLeetCodeLink } from '../lib/api';
+import { Button, Group, Loading, NavHeader, Screen, SectionLabel, T } from '../components/ui';
 
 // LeetCode moves this around; these are the labels as of late 2026
 const BIO_STEPS: [string, string][] = [
@@ -26,8 +25,6 @@ function Row({ children, last }: { children: React.ReactNode; last?: boolean }) 
 
 export default function Verify() {
   const { link, session, verified, refreshProfile, linkGitHub } = useAuth();
-  const [challenges, setChallenges] = useState<ChallengeProblem[] | null>(null);
-  const [rerolling, setRerolling] = useState(false);
   const [showBio, setShowBio] = useState(false);
   const [copied, setCopied] = useState(false);
   const [checking, setChecking] = useState<'check' | 'github' | null>(null);
@@ -35,10 +32,6 @@ export default function Verify() {
   const busy = useRef(false);
 
   const github = session?.user.identities?.find((i) => i.provider === 'github')?.identity_data?.user_name as string | undefined;
-
-  useEffect(() => {
-    if (link) fetchChallengeProblems(link.challenge_slugs).then(setChallenges).catch(() => setChallenges([]));
-  }, [link?.challenge_slugs.join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const check = useCallback(async (manual: 'check' | 'github' | null) => {
     if (busy.current || verified) return;
@@ -49,7 +42,7 @@ export default function Verify() {
       const res = await verifyLeetCodeLink();
       if (res.verified) await refreshProfile();
       else if (manual === 'github') setMessage(`Your LeetCode profile doesn’t list github.com/${github ?? 'you'} yet. Add it under Basic Info → GitHub, then check again.`);
-      else if (manual) setMessage('Nothing yet. Post a challenge problem, or save the code in your Summary and check again.');
+      else if (manual) setMessage('Nothing yet. Save the code in your Summary and check again, or just post your next solve.');
     } catch (e) {
       if (manual) setMessage(e instanceof ApiError ? e.message : 'Couldn’t check right now. Try again.');
     } finally {
@@ -78,19 +71,6 @@ export default function Verify() {
       }
     }
     await check('github');
-  };
-
-  const reroll = async () => {
-    setRerolling(true);
-    try {
-      const res = await rerollChallenges();
-      setChallenges(res.challenges);
-      await refreshProfile();
-    } catch (e) {
-      setMessage(e instanceof ApiError ? e.message : 'Couldn’t swap the problems. Try again.');
-    } finally {
-      setRerolling(false);
-    }
   };
 
   const copy = async () => {
@@ -127,30 +107,8 @@ export default function Verify() {
         <T variant="title">Prove @{link.leetcode_username} is yours</T>
         <T variant="body">Until you do, your profile says unverified and your LeetCode stats stay hidden. Most people never need this screen: their first post does it.</T>
 
-        <SectionLabel right={
-          <Pressable accessibilityRole="button" accessibilityLabel="Different problems" onPress={reroll} disabled={rerolling} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, opacity: rerolling ? 0.5 : 1 }}>
-            <RefreshCw size={12} color={Colors.text3} />
-            <T variant="monoSm">different ones</T>
-          </Pressable>
-        }>Fastest: post one</SectionLabel>
-        <Group>
-          {challenges === null ? <View style={{ padding: 16 }}><Loading /></View> : challenges.map((p, i) => (
-            <Pressable
-              key={p.slug}
-              accessibilityRole="link"
-              accessibilityLabel={`Open ${p.title} on LeetCode`}
-              onPress={() => Linking.openURL(`https://leetcode.com/problems/${p.slug}/`)}
-            >
-              <Row last={i === challenges.length - 1}>
-                <T variant="monoMedium" style={{ width: 40, fontSize: 12 }} color={Colors.text3}>#{p.frontend_id}</T>
-                <T variant="medium" style={{ flex: 1, fontSize: 14 }} numberOfLines={1}>{p.title}</T>
-                <DifficultyPill difficulty={p.difficulty} />
-                <ExternalLink size={14} color={Colors.text3} />
-              </Row>
-            </Pressable>
-          ))}
-        </Group>
-        <T variant="monoSm" style={{ marginTop: -6 }}>// solve any one after now, then post it. only you can submit on your account</T>
+        <SectionLabel>Easiest: post a solve</SectionLabel>
+        <T variant="bodySm">Solve any problem on LeetCode and post it here. Only the account owner can submit on it, so that’s proof enough.</T>
         <Button title="Start timer" icon={(c) => <Timer size={18} color={c} />} onPress={() => router.push('/timer')} />
 
         <SectionLabel>Or: GitHub</SectionLabel>

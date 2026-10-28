@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { BadgeCheck, Bell, ChevronRight, CircleCheck, Lock, Search, UserPlus } from 'lucide-react-native';
+import { BadgeCheck, Bell, ChevronRight, CircleCheck, Lock, Search, Sparkles, UserPlus } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../../constants/theme';
 import { useAuth } from '../../lib/auth-context';
-import { fetchFeed, fetchTeasers, setLiked, unreadNotificationCount } from '../../lib/api';
+import { fetchFeed, fetchFeedState, fetchTeasers, setLiked, unreadNotificationCount } from '../../lib/api';
 import { formatTimestamp } from '../../lib/format';
 import { getHiddenSolves } from '../../lib/social';
-import { FeedSolve, Teaser } from '../../types';
+import { FeedSolve, FeedState, Teaser } from '../../types';
 import { AvatarStack, Button, EmptyState, Loading, Screen, SectionLabel, T, Wordmark } from '../../components/ui';
 import { SolveCard } from '../../components/SolveCard';
 import { LockedPanel } from '../../components/LockedPanel';
@@ -91,12 +91,14 @@ export default function Home() {
   const { userId, link, verified } = useAuth();
   const [feed, setFeed] = useState<FeedSolve[] | null>(null);
   const [teasers, setTeasers] = useState<Teaser[]>([]);
+  const [state, setState] = useState<FeedState | null>(null);
   const [unread, setUnread] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!userId) return;
-    const [f, t, u, hidden] = await Promise.all([fetchFeed(userId), fetchTeasers(), unreadNotificationCount(), getHiddenSolves()]);
+    const [f, t, s, u, hidden] = await Promise.all([fetchFeed(userId), fetchTeasers(), fetchFeedState(), unreadNotificationCount(), getHiddenSolves()]);
+    setState(s);
     setFeed(f.filter((s) => !hidden.has(s.id)));
     setTeasers(t);
     setUnread(u);
@@ -136,7 +138,8 @@ export default function Home() {
   );
 
   const myToday = feed?.find((s) => s.user_id === userId && isToday(s.created_at));
-  const unlocked = !!myToday;
+  // The database decides; a fresh post counts straight away
+  const unlocked = !!myToday || !!state?.unlocked;
 
   const rows: Row[] = useMemo(() => {
     if (!feed) return [];
@@ -185,11 +188,23 @@ export default function Home() {
         contentContainerStyle={{ gap: 12, paddingHorizontal: 16, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accent} />}
         ListHeaderComponent={
-          <View style={styles.strip}>
-            <CircleCheck size={16} color={Colors.accent} />
-            <T variant="monoMedium" style={{ fontSize: 12, flex: 1 }} numberOfLines={1}>
-              unlocked · {myToday!.problem.title} · {clock(myToday!.created_at)}
-            </T>
+          <View style={{ gap: 10 }}>
+            {myToday ? (
+              <View style={styles.strip}>
+                <CircleCheck size={16} color={Colors.accent} />
+                <T variant="monoMedium" style={{ fontSize: 12, flex: 1 }} numberOfLines={1}>
+                  unlocked · {myToday.problem.title} · {clock(myToday.created_at)}
+                </T>
+              </View>
+            ) : (
+              <View style={styles.strip}>
+                <Sparkles size={16} color={Colors.accent} />
+                <T variant="monoMedium" style={{ fontSize: 12, flex: 1 }} numberOfLines={2}>
+                  day one · everything’s open till midnight. after that, post to unlock
+                </T>
+              </View>
+            )}
+            {!verified && link ? <VerifyStrip username={link.leetcode_username} /> : null}
           </View>
         }
         ListEmptyComponent={
