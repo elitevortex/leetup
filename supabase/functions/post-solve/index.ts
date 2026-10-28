@@ -3,8 +3,8 @@
 // Timed: started_at/ended_at are the user's manual timer. The solve must have an Accepted
 // submission for that problem inside the window. Untimed: no window, any Accepted submission
 // for that problem in the last 24 hours.
-// Unverified accounts can only post one of their challenge problems, submitted after it was
-// issued; that proves they own the LeetCode account, so the post also verifies them.
+// For an unverified account the submission must also come after they linked it: only the owner
+// can submit on that account, so the post verifies them (unless someone holds a stronger proof).
 import { adminClient, fail, json, requireUser, serve } from '../_shared/http.ts';
 import { fetchProfile, fetchRecentAccepted, LeetCodeError } from '../_shared/leetcode.ts';
 import { markVerified } from '../_shared/verify.ts';
@@ -46,9 +46,6 @@ serve(async (req, body) => {
   const { data: link } = await db.from('leetcode_links').select('*').eq('user_id', user.id).maybeSingle();
   if (!link) return fail(403, 'not_linked', 'Connect your LeetCode account first.');
   const verifying = !link.verified_at;
-  if (verifying && !link.challenge_slugs.includes(slug)) {
-    return fail(403, 'challenge_required', 'Your first post needs to be one of your verification problems.');
-  }
 
   const { data: problem } = await db.from('problems').select('slug, title, difficulty').eq('slug', slug).maybeSingle();
   if (!problem) return fail(404, 'unknown_problem', 'Pick a problem from the list.');
@@ -61,8 +58,9 @@ serve(async (req, body) => {
     throw e;
   }
 
-  let from = timed ? startedAt! - CLOCK_SKEW_MS : now - MAX_SESSION_MS;
-  if (verifying) from = Math.max(from, Date.parse(link.challenge_issued_at) - CLOCK_SKEW_MS);
+  const windowFrom = timed ? startedAt! - CLOCK_SKEW_MS : now - MAX_SESSION_MS;
+  const claimedFrom = Date.parse(link.claimed_at) - CLOCK_SKEW_MS;
+  const from = verifying ? Math.max(windowFrom, claimedFrom) : windowFrom;
   const to = timed ? endedAt! + AFTER_STOP_GRACE_MS : now + CLOCK_SKEW_MS;
   // The first Accepted in the window is the solve; later ones are re-submits
   const match = accepted
@@ -70,11 +68,15 @@ serve(async (req, body) => {
     .sort((a, b) => a.timestamp - b.timestamp)[0];
 
   if (!match) {
+    if (verifying && accepted.some((s) => s.titleSlug === slug && s.timestamp * 1000 >= windowFrom && s.timestamp * 1000 < claimedFrom)) {
+      return fail(422, 'before_link', `That ${problem.title} submission is from before you connected LeetUp. Post one you submit from now on.`);
+    }
     return fail(422, 'no_accepted_submission',
       `We couldn’t find an Accepted submission for ${problem.title} ${timed ? 'during your timer' : 'in the last 24 hours'}. ` +
       'If you just submitted, wait a few seconds and try again.');
   }
 
+  let verifiedNow = false;
   if (verifying) {
     let lcProfile;
     try {
@@ -84,9 +86,8 @@ serve(async (req, body) => {
       throw e;
     }
     if (!lcProfile) return fail(404, 'not_found', 'We couldn’t find your LeetCode account any more.');
-    if ((await markVerified(db, user.id, lcProfile)) === 'already_linked') {
-      return fail(409, 'already_linked', 'That LeetCode account is already linked to another LeetUp account.');
-    }
+    // Someone else holds this account; the post still counts, it just doesn't verify
+    verifiedNow = (await markVerified(db, user.id, lcProfile, 'solve')) === 'ok';
   }
 
   const { data: solve, error } = await db
@@ -105,5 +106,5 @@ serve(async (req, body) => {
   if (error?.code === '23505') return fail(409, 'already_posted', 'You’ve already posted this submission.');
   if (error) throw error;
 
-  return json({ solve, problem, verified_now: verifying });
+  return json({ solve, problem, verified_now: verifiedNow });
 });

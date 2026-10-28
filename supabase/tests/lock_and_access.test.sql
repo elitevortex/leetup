@@ -2,7 +2,7 @@
 -- Run with: npx supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(27);
 
 -- Act as a signed-in user, or go back to the service role (postgres)
 create function pg_temp.as_user(uid uuid) returns void language plpgsql as $$
@@ -20,11 +20,14 @@ end $$;
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'a@test.dev'),
   ('00000000-0000-0000-0000-00000000000b', 'b@test.dev'),
-  ('00000000-0000-0000-0000-00000000000c', 'c@test.dev');
-insert into public.profiles (id, username, display_name) values
-  ('00000000-0000-0000-0000-00000000000a', 'alice', 'Alice'),
-  ('00000000-0000-0000-0000-00000000000b', 'bob', 'Bob'),
-  ('00000000-0000-0000-0000-00000000000c', 'cara', 'Cara');
+  ('00000000-0000-0000-0000-00000000000c', 'c@test.dev'),
+  ('00000000-0000-0000-0000-00000000000d', 'd@test.dev');
+-- Everyone but D joined days ago, so only D is on their first-day pass
+insert into public.profiles (id, username, display_name, created_at) values
+  ('00000000-0000-0000-0000-00000000000a', 'alice', 'Alice', now() - interval '3 days'),
+  ('00000000-0000-0000-0000-00000000000b', 'bob', 'Bob', now() - interval '3 days'),
+  ('00000000-0000-0000-0000-00000000000c', 'cara', 'Cara', now() - interval '3 days'),
+  ('00000000-0000-0000-0000-00000000000d', 'dev', 'Dev', now());
 insert into public.leetcode_links (user_id, leetcode_username, verify_code) values
   ('00000000-0000-0000-0000-00000000000b', 'bob_lc', 'leetup-SECRET');
 insert into public.problems (slug, frontend_id, title, difficulty) values
@@ -32,7 +35,8 @@ insert into public.problems (slug, frontend_id, title, difficulty) values
   ('lru-cache', 146, 'LRU Cache', 'Medium')
 on conflict (slug) do nothing;
 insert into public.friendships (requester_id, addressee_id, status) values
-  ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b', 'accepted');
+  ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b', 'accepted'),
+  ('00000000-0000-0000-0000-00000000000d', '00000000-0000-0000-0000-00000000000b', 'accepted');
 insert into public.solves (id, user_id, problem_slug, time_seconds, lc_submission_id, solved_at, created_at) values
   ('10000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-00000000000b', 'lru-cache', 1180, 'b-today', now(), now()),
   ('10000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0000-00000000000b', 'two-sum', 250, 'b-old', now() - interval '2 days', now() - interval '2 days'),
@@ -69,6 +73,19 @@ select throws_ok(
 select lives_ok(
   $$update public.profiles set display_name = 'Alice C' where id = '00000000-0000-0000-0000-00000000000a'$$,
   'clients can edit their display name');
+
+select is((public.my_feed_state() ->> 'unlocked')::boolean, false,
+  'locked: my_feed_state reports locked');
+
+-- ---- D joined today: first-day pass ----
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000d');
+select is((select count(*)::int from public.solves where id = '10000000-0000-0000-0000-0000000000b1'), 1,
+  'first day: a friend''s solve from today is visible without posting');
+select is((public.my_feed_state() ->> 'first_day')::boolean, true,
+  'first day: my_feed_state reports the pass');
+select is((select count(*)::int from public.solves where user_id = '00000000-0000-0000-0000-00000000000c'), 0,
+  'first day: strangers stay hidden');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
 
 -- ---- A posts a verified solve (server side): unlocked ----
 select pg_temp.as_service();

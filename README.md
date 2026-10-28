@@ -19,25 +19,27 @@ npx expo start        # i = iOS simulator, w = browser
 
 Demo sign-in (email): `you@leetup.test` / `leetup-demo-123`. Home starts locked; post a solve (or re-run the seed) to unlock.
 
-Checks: `npm run typecheck` (app + Edge Functions) and `npm test` (unit tests + 33 database tests).
+Checks: `npm run typecheck` (app + Edge Functions) and `npm test` (unit tests + 37 database tests).
 
 ## How it fits together
 
 | Layer | Where | Notes |
 |---|---|---|
 | App | `app/` (expo-router), `components/`, `lib/` | Design tokens in `constants/theme.ts` mirror the LeetUp design system |
-| Database | `supabase/migrations/` | Row-level security enforces the lock: friends' posts from today are invisible until you post today |
+| Database | `supabase/migrations/` | Row-level security enforces the lock: friends' posts from today are invisible until you post today (except on the day you join) |
 | Server | `supabase/functions/` | The only code that talks to LeetCode. Solves are written only by `post-solve`, after it finds a matching Accepted submission |
 | Tests | `supabase/tests/`, `tests/` | pgTAP access rules; Deno unit tests |
 
 Edge Functions: `leetcode-link` (connect + verification), `post-solve`, `sync-profile` (stats + activity calendar), `sync-problems` (admin), `delete-account`.
 
-**Verification.** Entering a LeetCode username links it straight away, unverified: Home stays locked and the profile shows no LeetCode stats. Ownership is proven by any of:
-- the first post, which must be one of three random easy problems issued at link time and submitted after that (only the owner can submit on the account)
+**First-day pass.** The feed is fully open on the local day someone joins, so they can look around before posting. The lock starts at their first midnight.
+
+**Verification.** Entering a LeetCode username links it straight away, unverified: the profile shows no LeetCode stats until it's proven. Ownership is proven by any of:
+- the first post of any problem submitted after linking (only the owner can submit on the account)
 - signing in with (or linking) the GitHub account the LeetCode profile lists
 - a code in the LeetCode profile Summary (fallback on the Verify screen)
 
-Unverified claims don't reserve a username; when the real owner verifies, other unverified claims to it are removed.
+Unverified claims don't reserve a username; when the real owner verifies, other unverified claims to it are removed. A post is the weakest proof (someone could post another person's public submission first), so GitHub or the profile code takes a username back from a link that only a post verified.
 
 LeetCode's GraphQL endpoint is public but unofficial. All calls are server-side, small and cached; if it changes, only `supabase/functions/_shared/leetcode.ts` needs updating.
 
