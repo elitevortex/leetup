@@ -31,7 +31,7 @@ function AuthGate() {
     const group = segments[0];
     const screen = segments[1];
     if (status === 'signedOut' && group !== '(auth)') router.replace('/(auth)/login');
-    else if (status === 'needsProfile' && !(group === '(onboarding)' && screen === 'profile')) router.replace('/(onboarding)/profile');
+    else if (status === 'needsProfile' && !(group === '(onboarding)' && screen === 'setup')) router.replace('/(onboarding)/setup');
     else if (status === 'needsLeetCode' && !(group === '(onboarding)' && (screen === 'connect' || screen === 'verify'))) router.replace('/(onboarding)/connect');
     else if (status === 'ready' && (group === '(auth)' || group === '(onboarding)' || group === undefined)) router.replace('/(tabs)');
   }, [status, segments]);
@@ -70,7 +70,7 @@ export default function RootLayout() {
           <Stack.Screen name="timer" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', gestureEnabled: false }} />
           <Stack.Screen name="post" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
           <Stack.Screen name="media/[solveId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
-          <Stack.Screen name="report" options={{ presentation: 'transparentModal', animation: 'fade' }} />
+          <Stack.Screen name="report" options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
         </Stack>
       </AuthProvider>
     </GestureHandlerRootView>

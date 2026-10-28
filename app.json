@@ -15,7 +15,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.leetup.app"
+      "bundleIdentifier": "com.leetup.app",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "LeetUp uses the camera to film or photograph your solve and to scan friends’ QR codes.",
+        "NSMicrophoneUsageDescription": "LeetUp records sound when you film a video of your solve.",
+        "NSPhotoLibraryUsageDescription": "LeetUp lets you attach photos and videos of your solve from your library.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -43,7 +50,24 @@
       ],
       "expo-video",
       "expo-web-browser",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "LeetUp uses the camera to film or photograph your solve and to scan friends’ QR codes.",
+          "microphonePermission": "LeetUp records sound when you film a video of your solve.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "LeetUp lets you attach photos and videos of your solve from your library.",
+          "cameraPermission": "LeetUp uses the camera to film or photograph your solve and to scan friends’ QR codes.",
+          "microphonePermission": "LeetUp records sound when you film a video of your solve."
+        }
+      ],
+      "expo-apple-authentication"
     ]
   }
 }

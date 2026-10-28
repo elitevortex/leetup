@@ -6,6 +6,7 @@ import { Colors, Fonts, Radius } from '../../constants/theme';
 import { useAuth } from '../../lib/auth-context';
 import { fetchFeed, fetchTeasers, setLiked, unreadNotificationCount } from '../../lib/api';
 import { formatTimestamp } from '../../lib/format';
+import { getHiddenSolves } from '../../lib/social';
 import { FeedSolve, Teaser } from '../../types';
 import { AvatarStack, Button, EmptyState, Loading, Screen, SectionLabel, T, Wordmark } from '../../components/ui';
 import { SolveCard } from '../../components/SolveCard';
@@ -82,8 +83,8 @@ export default function Home() {
 
   const load = useCallback(async () => {
     if (!userId) return;
-    const [f, t, u] = await Promise.all([fetchFeed(userId), fetchTeasers(), unreadNotificationCount()]);
-    setFeed(f);
+    const [f, t, u, hidden] = await Promise.all([fetchFeed(userId), fetchTeasers(), unreadNotificationCount(), getHiddenSolves()]);
+    setFeed(f.filter((s) => !hidden.has(s.id)));
     setTeasers(t);
     setUnread(u);
   }, [userId]);
@@ -173,7 +174,7 @@ export default function Home() {
           <View style={styles.strip}>
             <CircleCheck size={16} color={Colors.accent} />
             <T variant="monoMedium" style={{ fontSize: 12, flex: 1 }} numberOfLines={1}>
-              unlocked · you solved {myToday!.problem.title} at {clock(myToday!.created_at)}
+              unlocked · {myToday!.problem.title} · {clock(myToday!.created_at)}
             </T>
           </View>
         }
