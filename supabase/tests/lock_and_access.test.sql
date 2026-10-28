@@ -2,7 +2,7 @@
 -- Run with: npx supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(23);
 
 -- Act as a signed-in user, or go back to the service role (postgres)
 create function pg_temp.as_user(uid uuid) returns void language plpgsql as $$
@@ -29,7 +29,8 @@ insert into public.leetcode_links (user_id, leetcode_username, verify_code) valu
   ('00000000-0000-0000-0000-00000000000b', 'bob_lc', 'leetup-SECRET');
 insert into public.problems (slug, frontend_id, title, difficulty) values
   ('two-sum', 1, 'Two Sum', 'Easy'),
-  ('lru-cache', 146, 'LRU Cache', 'Medium');
+  ('lru-cache', 146, 'LRU Cache', 'Medium')
+on conflict (slug) do nothing;
 insert into public.friendships (requester_id, addressee_id, status) values
   ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b', 'accepted');
 insert into public.solves (id, user_id, problem_slug, time_seconds, lc_submission_id, solved_at, created_at) values
@@ -84,6 +85,13 @@ select lives_ok(
   'unlocked: can like it');
 select is((select count(*)::int from public.solves where user_id = '00000000-0000-0000-0000-00000000000c'), 0,
   'unlocked: strangers stay hidden');
+
+select is(public.leetup_streak('00000000-0000-0000-0000-00000000000a'), 1,
+  'posting today starts a one-day streak');
+select is((public.profile_summary('bob') ->> 'relationship'), 'friends',
+  'profile_summary reports friendship');
+select is((public.profile_summary('cara') ->> 'relationship'), 'none',
+  'profile_summary reports strangers');
 
 -- ---- notifications ----
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000b');

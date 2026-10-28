@@ -40,7 +40,10 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 120
         }
-      ]
+      ],
+      "expo-video",
+      "expo-web-browser",
+      "expo-localization"
     ]
   }
 }
