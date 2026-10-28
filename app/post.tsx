@@ -112,10 +112,10 @@ export default function PostSolve() {
       router.replace({
         pathname: '/celebrate',
         params: {
+          solveId: solve.id,
           num: String(picked.frontend_id),
           title: picked.title,
           difficulty: picked.difficulty,
-          time: solve.time_seconds != null ? String(solve.time_seconds) : '',
           points: `+${DIFFICULTY_POINTS[picked.difficulty]}`,
         },
       });

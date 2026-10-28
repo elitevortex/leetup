@@ -4,6 +4,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import {
   AppNotification,
+  Celebration,
   Comment,
   FeedSolve,
   FriendRow,
@@ -101,6 +102,10 @@ export async function uploadSolveMedia(
       }),
     );
   }
+}
+
+export async function fetchCelebration(solveId: string): Promise<Celebration | null> {
+  return check(await supabase.rpc('solve_celebration', { p_solve_id: solveId })) as Celebration | null;
 }
 
 // ---------- Feed ----------
