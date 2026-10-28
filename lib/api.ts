@@ -75,7 +75,7 @@ export async function searchProblems(q: string): Promise<Problem[]> {
 }
 
 export function postSolve(input: { problem_slug: string; started_at?: string; ended_at?: string; active_seconds?: number; note?: string }) {
-  return callFunction<{ solve: { id: string }; problem: Problem }>('post-solve', input);
+  return callFunction<{ solve: { id: string; time_seconds: number | null }; problem: Problem }>('post-solve', input);
 }
 
 export async function uploadSolveMedia(

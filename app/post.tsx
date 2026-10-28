@@ -109,8 +109,16 @@ export default function PostSolve() {
         }
       }
       await saveTimer(null);
-      router.dismissAll();
-      router.replace('/(tabs)');
+      router.replace({
+        pathname: '/celebrate',
+        params: {
+          num: String(picked.frontend_id),
+          title: picked.title,
+          difficulty: picked.difficulty,
+          time: solve.time_seconds != null ? String(solve.time_seconds) : '',
+          points: `+${DIFFICULTY_POINTS[picked.difficulty]}`,
+        },
+      });
     } catch (e) {
       const err = e instanceof ApiError ? e : new ApiError('network', 'Couldn’t post. Check your connection and try again.');
       // LeetCode can take a few seconds to show a fresh submission, so keep looking for a bit

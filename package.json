@@ -6,7 +6,12 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit && cd supabase/functions && deno check */index.ts",
+    "test": "deno test tests/ && supabase test db",
+    "db:start": "supabase start -x studio,imgproxy,vector,logflare,supavisor,mailpit",
+    "db:seed": "node scripts/seed-local.mjs",
+    "functions": "supabase functions serve"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",
