@@ -6,10 +6,13 @@ import Animated, {
   Easing,
   SharedValue,
   interpolate,
+  interpolateColor,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withDelay,
+  withRepeat,
+  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -20,8 +23,8 @@ import { formatDuration } from '../lib/format';
 import { Celebration, Difficulty } from '../types';
 import { Avatar, Button, T } from '../components/ui';
 
-// "Takeover": a green flood with a burst of code glyphs, a hard cut to black, "Accepted" with two
-// ribbons drawing across, then the payoff. The first solve of the day pays off with the unlock;
+// "Takeover": a green flood with a burst of code glyphs, a hard cut to black, "Accepted" with
+// the word getting "selected" like code in an editor, then the payoff. The first solve of the day pays off with the unlock;
 // later solves pay off with one progress highlight. Tap anywhere to skip to the end.
 
 const CUT_MS = 950;
@@ -112,7 +115,11 @@ export default function Celebrate() {
   const burst = useSharedValue(reduced ? 1 : 0);
   const cut = useSharedValue(reduced ? 1 : 0);
   const title = useSharedValue(reduced ? 1 : 0);
-  const ribbons = useSharedValue(reduced ? 1 : 0);
+  // Selection: line highlight, then a block sweeping behind the word, then a blinking cursor
+  const line = useSharedValue(reduced ? 1 : 0);
+  const select = useSharedValue(reduced ? 1 : 0);
+  const blink = useSharedValue(1);
+  const [wordWidth, setWordWidth] = useState(0);
   const payoff = useSharedValue(reduced ? 1 : 0);
   const extras = useSharedValue(reduced ? 1 : 0);
 
@@ -130,7 +137,13 @@ export default function Celebrate() {
     burst.value = withDelay(80, withTiming(1, { duration: 900, easing: Easing.out(Easing.quad) }));
     cut.value = withDelay(CUT_MS, withTiming(1, { duration: 0 }));
     title.value = withDelay(CUT_MS + 40, withSpring(1, { damping: 14, stiffness: 160 }));
-    ribbons.value = withDelay(CUT_MS + 120, withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) }));
+    line.value = withDelay(CUT_MS + 40, withTiming(1, { duration: 200 }));
+    select.value = withDelay(CUT_MS + 230, withTiming(1, { duration: 380, easing: Easing.inOut(Easing.cubic) }));
+    // Hard on/off like a terminal cursor, starting once the selection lands
+    blink.value = withDelay(
+      CUT_MS + 700,
+      withRepeat(withSequence(withTiming(1, { duration: 550 }), withTiming(0, { duration: 0 }), withTiming(0, { duration: 550 }), withTiming(1, { duration: 0 })), -1),
+    );
     payoff.value = withDelay(CUT_MS + 520, withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) }));
     extras.value = withDelay(CUT_MS + 820, withTiming(1, { duration: 900 }));
     timers.current = [
@@ -144,7 +157,7 @@ export default function Celebrate() {
   const skip = () => {
     if (done) return;
     timers.current.forEach(clearTimeout);
-    [flood, burst, cut, title, ribbons, payoff, extras].forEach((v) => (v.value = 1));
+    [flood, burst, cut, title, line, select, payoff, extras].forEach((v) => (v.value = 1));
     setDone(true);
   };
 
@@ -163,8 +176,14 @@ export default function Celebrate() {
     letterSpacing: interpolate(title.value, [0, 1], [6, -2]),
     transform: [{ translateY: interpolate(title.value, [0, 1], [30, 0]) }],
   }));
-  const ribbonA = useAnimatedStyle(() => ({ transform: [{ rotate: '-7deg' }, { scaleX: ribbons.value }] }));
-  const ribbonB = useAnimatedStyle(() => ({ transform: [{ rotate: '5deg' }, { scaleX: interpolate(ribbons.value, [0.25, 1], [0, 1], 'clamp') }] }));
+  const lineStyle = useAnimatedStyle(() => ({ opacity: line.value }));
+  const blockStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: select.value }] }));
+  // The word turns from white to ink as the block passes the middle of it
+  const wordColor = useAnimatedStyle(() => ({ color: interpolateColor(select.value, [0, 0.55, 1], [Colors.text, Colors.text, Colors.accentInk]) }));
+  const caretStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(select.value, [0, 0.05], [0, 1], 'clamp') * blink.value,
+    transform: [{ translateX: (select.value - 1) * (wordWidth + 22) }],
+  }));
   const payoffStyle = useAnimatedStyle(() => ({ opacity: payoff.value, transform: [{ translateY: interpolate(payoff.value, [0, 1], [24, 0]) }] }));
 
   const glyphs = useMemo(() => {
@@ -203,10 +222,15 @@ export default function Celebrate() {
 
       {/* After the cut */}
       <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, styles.after]}>
-        <View style={{ alignItems: 'center', justifyContent: 'center', height: 150 }}>
-          <Animated.View style={[styles.ribbon, { width: width * 0.86, top: 40 }, ribbonA]} />
-          <Animated.View style={[styles.ribbon, styles.ribbonB, { width: width * 0.62, top: 86 }, ribbonB]} />
-          <Animated.Text style={[styles.title, titleStyle]} accessibilityRole="header">Accepted</Animated.Text>
+        <View style={{ alignItems: 'center', justifyContent: 'center', height: 150, alignSelf: 'stretch' }}>
+          <Animated.View style={[styles.line, lineStyle]} />
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View onLayout={(e) => setWordWidth(e.nativeEvent.layout.width)}>
+              <Animated.View style={[styles.block, blockStyle]} />
+              <Animated.Text style={[styles.title, titleStyle, wordColor]} accessibilityRole="header">Accepted</Animated.Text>
+            </View>
+            <Animated.View style={[styles.caret, caretStyle]} />
+          </View>
         </View>
 
         <Animated.View style={[{ alignSelf: 'stretch', gap: 16 }, payoffStyle]} pointerEvents={done ? 'auto' : 'none'}>
@@ -291,8 +315,23 @@ const styles = StyleSheet.create({
   bigPoints: { fontFamily: Fonts.monoBold, fontSize: 96, lineHeight: 110, letterSpacing: -5 },
   after: { justifyContent: 'center', alignItems: 'center', gap: 28, paddingHorizontal: 24 },
   title: { fontFamily: Fonts.monoBold, fontSize: 56, lineHeight: 66, color: Colors.text },
-  ribbon: { position: 'absolute', height: 46, borderRadius: 23, backgroundColor: Colors.accent, opacity: 0.9, transformOrigin: 'left' },
-  ribbonB: { height: 30, borderRadius: 15, opacity: 0.55 },
+  // Editor-style current-line highlight, running past the screen gutter
+  line: { position: 'absolute', left: -24, right: -24, top: 44, height: 62, backgroundColor: 'rgba(0, 214, 143, 0.08)', borderLeftWidth: 3, borderLeftColor: Colors.accent },
+  block: {
+    position: 'absolute',
+    top: -4,
+    bottom: -4,
+    left: -10,
+    right: -10,
+    borderRadius: 6,
+    backgroundColor: Colors.accent,
+    transformOrigin: 'left',
+    shadowColor: Colors.accent,
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  caret: { width: 5, height: 58, marginLeft: 12, backgroundColor: Colors.text },
   stats: { flexDirection: 'row', gap: 8 },
   stat: { flex: 1, gap: 6, padding: 14, borderRadius: 14, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   odo: { fontFamily: Fonts.monoSemiBold, fontSize: 24, lineHeight: 30, letterSpacing: -1, color: Colors.text },
