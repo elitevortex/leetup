@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { ComponentRef, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from 'react-native';
 import { Colors } from '../../constants/theme';
 import { useAuth } from '../../lib/auth-context';
@@ -14,7 +14,7 @@ export default function EmailAuth() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const passwordRef = useRef<TextInput>(null);
+  const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
 
   const submit = async () => {
     setError(null);

@@ -1,4 +1,4 @@
-import React, { forwardRef, ReactNode, useState } from 'react';
+import React, { ComponentRef, forwardRef, ReactNode, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -204,7 +204,7 @@ export function SmallButton({ title, onPress, variant = 'secondary', disabled, a
 }
 
 // Text field with the brand's green > prompt
-export const Input = forwardRef<TextInput, TextInputProps & { prompt?: boolean; containerStyle?: StyleProp<ViewStyle>; right?: ReactNode }>(
+export const Input = forwardRef<ComponentRef<typeof TextInput>, TextInputProps & { prompt?: boolean; containerStyle?: StyleProp<ViewStyle>; right?: ReactNode }>(
   function Input({ prompt = true, containerStyle, right, onFocus, onBlur, style, ...rest }, ref) {
     const [focused, setFocused] = useState(false);
     return (

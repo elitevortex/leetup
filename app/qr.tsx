@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderStrong,
   },
   qrFrame: { padding: 16, borderRadius: 18, backgroundColor: Colors.text },
-  qrBadgeWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  qrBadgeWrap: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   qrBadge: {
     width: 48,
     height: 48,
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 20 },
+  overlay: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: 20 },
   viewfinder: { width: 210, height: 210 },
   corner: { position: 'absolute', width: 36, height: 36, borderColor: Colors.accent },
   hintPill: {
