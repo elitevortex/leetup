@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { ComponentRef, useEffect, useRef, useState } from 'react';
 import { NativeScrollEvent, NativeSyntheticEvent, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
@@ -33,7 +33,7 @@ export default function MediaViewer() {
   // undefined while loading, null when there's nothing to show
   const [media, setMedia] = useState<SolveMedia[] | null | undefined>(undefined);
   const [page, setPage] = useState(0);
-  const scroller = useRef<ScrollView>(null);
+  const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
   const positioned = useRef(false);
 
   useEffect(() => {

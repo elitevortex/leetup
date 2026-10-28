@@ -52,7 +52,7 @@ export default function Blocked() {
         data={people}
         keyExtractor={(p) => p.id}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
-        ListHeaderComponent={error ? <T variant="monoSm" color={Colors.hard} style={{ paddingVertical: 8 }}>{error}</T> : null}
+        ListHeaderComponent={error ? <T variant="monoSm" color={Colors.hard} style={{ paddingVertical: 8 }}>{error}</T> : undefined}
         ListEmptyComponent={
           <EmptyState icon={<Ban size={28} color={Colors.text3} />} title="No one blocked" body="People you block can’t see your posts or profile." />
         }
