@@ -24,6 +24,7 @@ export interface LeetCodeProfile {
   realName: string | null;
   aboutMe: string;
   avatar: string | null;
+  githubUrl: string | null;
   ranking: number | null;
   easy: number;
   medium: number;
@@ -34,12 +35,14 @@ export async function fetchProfile(username: string): Promise<LeetCodeProfile | 
   const data = await gql<{
     matchedUser: null | {
       username: string;
+      githubUrl: string | null;
       profile: { realName: string | null; aboutMe: string | null; ranking: number | null; userAvatar: string | null };
       submitStatsGlobal: { acSubmissionNum: { difficulty: string; count: number }[] };
     };
   }>(
     `query($u: String!) { matchedUser(username: $u) {
       username
+      githubUrl
       profile { realName aboutMe ranking userAvatar }
       submitStatsGlobal { acSubmissionNum { difficulty count } }
     } }`,
@@ -53,6 +56,7 @@ export async function fetchProfile(username: string): Promise<LeetCodeProfile | 
     realName: u.profile.realName || null,
     aboutMe: u.profile.aboutMe ?? '',
     avatar: u.profile.userAvatar,
+    githubUrl: u.githubUrl,
     ranking: u.profile.ranking,
     easy: count('Easy'),
     medium: count('Medium'),

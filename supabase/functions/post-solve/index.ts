@@ -3,8 +3,11 @@
 // Timed: started_at/ended_at are the user's manual timer. The solve must have an Accepted
 // submission for that problem inside the window. Untimed: no window, any Accepted submission
 // for that problem in the last 24 hours.
+// Unverified accounts can only post one of their challenge problems, submitted after it was
+// issued; that proves they own the LeetCode account, so the post also verifies them.
 import { adminClient, fail, json, requireUser, serve } from '../_shared/http.ts';
-import { fetchRecentAccepted, LeetCodeError } from '../_shared/leetcode.ts';
+import { fetchProfile, fetchRecentAccepted, LeetCodeError } from '../_shared/leetcode.ts';
+import { markVerified } from '../_shared/verify.ts';
 
 const CLOCK_SKEW_MS = 60_000;
 // People often hit submit a moment after stopping the timer
@@ -40,21 +43,26 @@ serve(async (req, body) => {
     }
   }
 
-  const { data: profile } = await db.from('profiles').select('leetcode_username').eq('id', user.id).maybeSingle();
-  if (!profile?.leetcode_username) return fail(403, 'not_verified', 'Connect and verify your LeetCode account first.');
+  const { data: link } = await db.from('leetcode_links').select('*').eq('user_id', user.id).maybeSingle();
+  if (!link) return fail(403, 'not_linked', 'Connect your LeetCode account first.');
+  const verifying = !link.verified_at;
+  if (verifying && !link.challenge_slugs.includes(slug)) {
+    return fail(403, 'challenge_required', 'Your first post needs to be one of your verification problems.');
+  }
 
   const { data: problem } = await db.from('problems').select('slug, title, difficulty').eq('slug', slug).maybeSingle();
   if (!problem) return fail(404, 'unknown_problem', 'Pick a problem from the list.');
 
   let accepted;
   try {
-    accepted = await fetchRecentAccepted(profile.leetcode_username, 20);
+    accepted = await fetchRecentAccepted(link.leetcode_username, 20);
   } catch (e) {
     if (e instanceof LeetCodeError) return fail(502, 'leetcode_unavailable', 'LeetCode isn’t responding right now. Try again in a minute.');
     throw e;
   }
 
-  const from = timed ? startedAt! - CLOCK_SKEW_MS : now - MAX_SESSION_MS;
+  let from = timed ? startedAt! - CLOCK_SKEW_MS : now - MAX_SESSION_MS;
+  if (verifying) from = Math.max(from, Date.parse(link.challenge_issued_at) - CLOCK_SKEW_MS);
   const to = timed ? endedAt! + AFTER_STOP_GRACE_MS : now + CLOCK_SKEW_MS;
   // The first Accepted in the window is the solve; later ones are re-submits
   const match = accepted
@@ -65,6 +73,20 @@ serve(async (req, body) => {
     return fail(422, 'no_accepted_submission',
       `We couldn’t find an Accepted submission for ${problem.title} ${timed ? 'during your timer' : 'in the last 24 hours'}. ` +
       'If you just submitted, wait a few seconds and try again.');
+  }
+
+  if (verifying) {
+    let lcProfile;
+    try {
+      lcProfile = await fetchProfile(link.leetcode_username);
+    } catch (e) {
+      if (e instanceof LeetCodeError) return fail(502, 'leetcode_unavailable', 'LeetCode isn’t responding right now. Try again in a minute.');
+      throw e;
+    }
+    if (!lcProfile) return fail(404, 'not_found', 'We couldn’t find your LeetCode account any more.');
+    if ((await markVerified(db, user.id, lcProfile)) === 'already_linked') {
+      return fail(409, 'already_linked', 'That LeetCode account is already linked to another LeetUp account.');
+    }
   }
 
   const { data: solve, error } = await db
@@ -83,5 +105,5 @@ serve(async (req, body) => {
   if (error?.code === '23505') return fail(409, 'already_posted', 'You’ve already posted this submission.');
   if (error) throw error;
 
-  return json({ solve, problem });
+  return json({ solve, problem, verified_now: verifying });
 });
