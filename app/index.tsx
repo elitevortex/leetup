@@ -1,22 +1,7 @@
-import { Redirect } from 'expo-router';
-import { ActivityIndicator, View } from 'react-native';
-import { useAuth } from '../lib/auth-context';
+import { View } from 'react-native';
 import { Colors } from '../constants/theme';
 
+// The AuthGate in the root layout redirects from here once the account state is known
 export default function Index() {
-  const { session, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
-
-  if (session) {
-    return <Redirect href="/(tabs)" />;
-  }
-
-  return <Redirect href="/(auth)/login" />;
+  return <View style={{ flex: 1, backgroundColor: Colors.bg }} />;
 }

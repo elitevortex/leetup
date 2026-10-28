@@ -11,6 +11,12 @@ const CLOCK_SKEW_MS = 60_000;
 const AFTER_STOP_GRACE_MS = 10 * 60_000;
 const MAX_SESSION_MS = 24 * 60 * 60_000;
 
+function solveSeconds(startedAt: number, endedAt: number, activeSeconds: number | null): number {
+  const wall = Math.round((endedAt - startedAt) / 1000);
+  const active = activeSeconds != null && Number.isFinite(activeSeconds) ? Math.round(activeSeconds) : wall;
+  return Math.max(1, Math.min(wall, active));
+}
+
 serve(async (req, body) => {
   const user = await requireUser(req);
   if (!user) return fail(401, 'unauthorized', 'Sign in first.');
@@ -20,6 +26,8 @@ serve(async (req, body) => {
   const note = body.note == null ? null : String(body.note).trim().slice(0, 280) || null;
   const startedAt = body.started_at ? Date.parse(String(body.started_at)) : null;
   const endedAt = body.ended_at ? Date.parse(String(body.ended_at)) : null;
+  // Timer time excluding pauses; can never exceed the wall-clock window
+  const activeSeconds = body.active_seconds == null ? null : Number(body.active_seconds);
   const now = Date.now();
 
   const timed = startedAt !== null || endedAt !== null;
@@ -64,7 +72,7 @@ serve(async (req, body) => {
     .insert({
       user_id: user.id,
       problem_slug: slug,
-      time_seconds: timed ? Math.max(1, Math.round((endedAt! - startedAt!) / 1000)) : null,
+      time_seconds: timed ? solveSeconds(startedAt!, endedAt!, activeSeconds) : null,
       language: match.lang,
       note,
       lc_submission_id: match.id,

@@ -60,6 +60,25 @@ export async function fetchProfile(username: string): Promise<LeetCodeProfile | 
   };
 }
 
+export interface LeetCodeCalendar {
+  streak: number;
+  activeDays: number;
+  // Unix-day (UTC midnight, seconds) -> submissions that day
+  days: Record<string, number>;
+}
+
+export async function fetchCalendar(username: string): Promise<LeetCodeCalendar | null> {
+  const data = await gql<{
+    matchedUser: null | { userCalendar: { streak: number; totalActiveDays: number; submissionCalendar: string } };
+  }>(
+    `query($u: String!) { matchedUser(username: $u) { userCalendar { streak totalActiveDays submissionCalendar } } }`,
+    { u: username },
+  );
+  const cal = data.matchedUser?.userCalendar;
+  if (!cal) return null;
+  return { streak: cal.streak, activeDays: cal.totalActiveDays, days: JSON.parse(cal.submissionCalendar || '{}') };
+}
+
 export interface AcceptedSubmission {
   id: string;
   titleSlug: string;

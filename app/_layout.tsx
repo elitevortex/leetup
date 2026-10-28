@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { Slot } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   useFonts,
   Geist_400Regular,
@@ -15,9 +16,32 @@ import {
   GeistMono_600SemiBold,
   GeistMono_700Bold,
 } from '@expo-google-fonts/geist-mono';
-import { AuthProvider } from '../lib/auth-context';
+import { AuthProvider, useAuth } from '../lib/auth-context';
+import { Colors } from '../constants/theme';
 
 SplashScreen.preventAutoHideAsync();
+
+// Sends people to the right step for their account state, wherever they are
+function AuthGate() {
+  const { status } = useAuth();
+  const segments = useSegments() as string[];
+
+  useEffect(() => {
+    if (status === 'loading') return;
+    const group = segments[0];
+    const screen = segments[1];
+    if (status === 'signedOut' && group !== '(auth)') router.replace('/(auth)/login');
+    else if (status === 'needsProfile' && !(group === '(onboarding)' && screen === 'profile')) router.replace('/(onboarding)/profile');
+    else if (status === 'needsLeetCode' && !(group === '(onboarding)' && (screen === 'connect' || screen === 'verify'))) router.replace('/(onboarding)/connect');
+    else if (status === 'ready' && (group === '(auth)' || group === '(onboarding)' || group === undefined)) router.replace('/(tabs)');
+  }, [status, segments]);
+
+  useEffect(() => {
+    if (status !== 'loading') SplashScreen.hideAsync();
+  }, [status]);
+
+  return null;
+}
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -31,17 +55,24 @@ export default function RootLayout() {
     GeistMono_700Bold,
   });
 
-  useEffect(() => {
-    if (fontsLoaded || fontError) SplashScreen.hideAsync();
-  }, [fontsLoaded, fontError]);
-
   // Hold the splash until fonts are ready so text never flashes in the system face
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <AuthProvider>
-      <StatusBar style="light" />
-      <Slot />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.bg }}>
+      <AuthProvider>
+        <StatusBar style="light" />
+        <AuthGate />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg }, animation: 'slide_from_right' }}>
+          <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+          <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
+          <Stack.Screen name="(onboarding)" options={{ animation: 'fade' }} />
+          <Stack.Screen name="timer" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', gestureEnabled: false }} />
+          <Stack.Screen name="post" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+          <Stack.Screen name="media/[solveId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+          <Stack.Screen name="report" options={{ presentation: 'transparentModal', animation: 'fade' }} />
+        </Stack>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
