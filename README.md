@@ -19,7 +19,7 @@ npx expo start        # i = iOS simulator, w = browser
 
 Demo sign-in (email): `you@leetup.test` / `leetup-demo-123`. Home starts locked; post a solve (or re-run the seed) to unlock.
 
-Checks: `npm run typecheck` (app + Edge Functions) and `npm test` (formatting unit tests + 23 database access-rule tests).
+Checks: `npm run typecheck` (app + Edge Functions) and `npm test` (unit tests + 33 database tests).
 
 ## How it fits together
 
@@ -30,7 +30,14 @@ Checks: `npm run typecheck` (app + Edge Functions) and `npm test` (formatting un
 | Server | `supabase/functions/` | The only code that talks to LeetCode. Solves are written only by `post-solve`, after it finds a matching Accepted submission |
 | Tests | `supabase/tests/`, `tests/` | pgTAP access rules; Deno unit tests |
 
-Edge Functions: `leetcode-link` (connect + bio-code verification), `post-solve`, `sync-profile` (stats + activity calendar), `sync-problems` (admin), `delete-account`.
+Edge Functions: `leetcode-link` (connect + verification), `post-solve`, `sync-profile` (stats + activity calendar), `sync-problems` (admin), `delete-account`.
+
+**Verification.** Entering a LeetCode username links it straight away, unverified: Home stays locked and the profile shows no LeetCode stats. Ownership is proven by any of:
+- the first post, which must be one of three random easy problems issued at link time and submitted after that (only the owner can submit on the account)
+- signing in with (or linking) the GitHub account the LeetCode profile lists
+- a code in the LeetCode profile Summary (fallback on the Verify screen)
+
+Unverified claims don't reserve a username; when the real owner verifies, other unverified claims to it are removed.
 
 LeetCode's GraphQL endpoint is public but unofficial. All calls are server-side, small and cached; if it changes, only `supabase/functions/_shared/leetcode.ts` needs updating.
 
@@ -46,7 +53,8 @@ LeetCode's GraphQL endpoint is public but unofficial. All calls are server-side,
 2. **Auth URLs.** Authentication → URL Configuration: add `leetup://auth-callback` to redirect URLs. Set up SMTP and turn on email confirmations.
 3. **Sign in with Apple.** In Apple Developer, enable Sign in with Apple for `com.leetup.app`. In Supabase → Auth → Providers → Apple, add `com.leetup.app` as a client ID (native sign-in, no secret needed for iOS).
 4. **Google sign-in.** Create a Web OAuth client in Google Cloud, add Supabase's callback URL to it, and paste the client ID + secret into Supabase → Auth → Providers → Google.
-5. **EAS builds.**
+5. **GitHub sign-in.** Create an OAuth app at github.com/settings/developers with callback `https://<ref>.supabase.co/auth/v1/callback`, paste the client ID + secret into Supabase → Auth → Providers → GitHub, and turn on Auth → Settings → "Allow manual linking" so email/Apple users can add GitHub to verify.
+6. **EAS builds.**
    ```bash
    npm i -g eas-cli && eas login && eas init
    eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value https://<ref>.supabase.co
@@ -55,8 +63,8 @@ LeetCode's GraphQL endpoint is public but unofficial. All calls are server-side,
    eas build -p ios --profile preview      # install on your phone
    eas build -p ios --profile production && eas submit -p ios
    ```
-6. **App Store Connect.** App record, screenshots, age rating, support URL, and live pages for `https://leetup.app/privacy` and `https://leetup.app/terms` (Settings links to them). Give App Review a demo account that's already linked to a LeetCode account.
-7. **Name.** Run a trademark search for "LeetUp" (IP Australia, USPTO) before submitting.
+7. **App Store Connect.** App record, screenshots, age rating, support URL, and live pages for `https://leetup.app/privacy` and `https://leetup.app/terms` (Settings links to them). Give App Review a demo account that's already linked to a LeetCode account.
+8. **Name.** Run a trademark search for "LeetUp" (IP Australia, USPTO) before submitting.
 
 ## Not built yet
 

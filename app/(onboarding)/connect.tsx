@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { router } from 'expo-router';
-import { Check } from 'lucide-react-native';
+import { BadgeCheck, Check } from 'lucide-react-native';
 import { Colors, Fonts } from '../../constants/theme';
 import { useAuth } from '../../lib/auth-context';
 import { ApiError, startLeetCodeLink } from '../../lib/api';
@@ -20,9 +19,11 @@ function Count({ value, label, fg, bg, line }: { value: number; label: string; f
 }
 
 export default function Connect() {
-  const { signOut } = useAuth();
+  const { signOut, refreshProfile } = useAuth();
   const [username, setUsername] = useState('');
   const [preview, setPreview] = useState<LeetCodePreview | null>(null);
+  const [verified, setVerified] = useState(false);
+  const [entering, setEntering] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +36,7 @@ export default function Connect() {
     try {
       const res = await startLeetCodeLink(u);
       setPreview(res.preview);
+      setVerified(res.verified);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Something went wrong. Try again.');
     } finally {
@@ -48,7 +50,7 @@ export default function Connect() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, gap: 14, padding: 20 }} keyboardShouldPersistTaps="handled">
           <T variant="title">Connect your LeetCode</T>
-          <T variant="body">Your profile mirrors your real LeetCode stats. Solves sync automatically, no browser extension needed.</T>
+          <T variant="body">Your profile mirrors your real LeetCode stats. Your first post proves the account is yours, so there’s nothing to paste.</T>
 
           <SectionLabel>LeetCode username</SectionLabel>
           <Input
@@ -82,6 +84,12 @@ export default function Connect() {
                     </T>
                   </View>
                 </View>
+                {verified ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <BadgeCheck size={16} color={Colors.accent} />
+                    <T variant="monoMedium" style={{ fontSize: 12 }} color={Colors.accent}>verified via GitHub</T>
+                  </View>
+                ) : null}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Count value={preview.easy} label="EASY" fg={Colors.easy} bg={Colors.easyTint} line={Colors.easyLine} />
                   <Count value={preview.medium} label="MEDIUM" fg={Colors.medium} bg={Colors.mediumTint} line={Colors.mediumLine} />
@@ -94,7 +102,15 @@ export default function Connect() {
           <View style={{ flex: 1, minHeight: 16 }} />
           {preview ? (
             <>
-              <Button title="Yes, that’s me →" onPress={() => router.push('/(onboarding)/verify')} />
+              <Button
+                title="Yes, that’s me →"
+                loading={entering}
+                onPress={async () => {
+                  setEntering(true);
+                  // The link now exists, so a refresh moves the router into the app
+                  await refreshProfile().finally(() => setEntering(false));
+                }}
+              />
               <T variant="monoSm" style={{ textAlign: 'center' }}>not you? check the spelling</T>
             </>
           ) : (

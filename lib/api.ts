@@ -5,10 +5,12 @@ import { supabase } from './supabase';
 import {
   AppNotification,
   Celebration,
+  ChallengeProblem,
   Comment,
   FeedSolve,
   FriendRow,
   LeaderboardRow,
+  LeetCodeLink,
   LeetCodePreview,
   PersonSummary,
   Problem,
@@ -48,16 +50,27 @@ async function callFunction<T>(name: string, body: Record<string, unknown> = {})
 
 // ---------- LeetCode account ----------
 
+// Links straight away; `verified` is true when the LeetCode profile lists the GitHub account you signed in with
 export function startLeetCodeLink(username: string) {
-  return callFunction<{ preview: LeetCodePreview; code: string }>('leetcode-link', { action: 'start', username });
+  return callFunction<{ preview: LeetCodePreview; verified: boolean; challenges: ChallengeProblem[] }>('leetcode-link', { action: 'start', username });
+}
+
+export function rerollChallenges() {
+  return callFunction<{ challenges: ChallengeProblem[] }>('leetcode-link', { action: 'challenge' });
 }
 
 export function verifyLeetCodeLink() {
-  return callFunction<{ verified: boolean; username?: string }>('leetcode-link', { action: 'verify' });
+  return callFunction<{ verified: boolean; method?: 'github' | 'bio' | 'solve' }>('leetcode-link', { action: 'verify' });
 }
 
-export async function getLeetCodeLink() {
-  return check(await supabase.from('leetcode_links').select('leetcode_username, verify_code, verified_at').maybeSingle());
+export async function fetchChallengeProblems(slugs: string[]): Promise<ChallengeProblem[]> {
+  if (slugs.length === 0) return [];
+  const rows = check(await supabase.from('problems').select('slug, frontend_id, title, difficulty').in('slug', slugs)) as ChallengeProblem[];
+  return slugs.map((s) => rows.find((p) => p.slug === s)).filter((p): p is ChallengeProblem => !!p);
+}
+
+export async function getLeetCodeLink(): Promise<LeetCodeLink | null> {
+  return check(await supabase.from('leetcode_links').select('leetcode_username, verify_code, verified_at, challenge_slugs').maybeSingle());
 }
 
 export function syncProfile(force = false) {
@@ -76,7 +89,7 @@ export async function searchProblems(q: string): Promise<Problem[]> {
 }
 
 export function postSolve(input: { problem_slug: string; started_at?: string; ended_at?: string; active_seconds?: number; note?: string }) {
-  return callFunction<{ solve: { id: string; time_seconds: number | null }; problem: Problem }>('post-solve', input);
+  return callFunction<{ solve: { id: string; time_seconds: number | null }; problem: Problem; verified_now: boolean }>('post-solve', input);
 }
 
 export async function uploadSolveMedia(

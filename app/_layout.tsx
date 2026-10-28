@@ -32,7 +32,7 @@ function AuthGate() {
     const screen = segments[1];
     if (status === 'signedOut' && group !== '(auth)') router.replace('/(auth)/login');
     else if (status === 'needsProfile' && !(group === '(onboarding)' && screen === 'setup')) router.replace('/(onboarding)/setup');
-    else if (status === 'needsLeetCode' && !(group === '(onboarding)' && (screen === 'connect' || screen === 'verify'))) router.replace('/(onboarding)/connect');
+    else if (status === 'needsLeetCode' && !(group === '(onboarding)' && screen === 'connect')) router.replace('/(onboarding)/connect');
     else if (status === 'ready' && (group === '(auth)' || group === '(onboarding)' || group === undefined)) router.replace('/(tabs)');
   }, [status, segments]);
 

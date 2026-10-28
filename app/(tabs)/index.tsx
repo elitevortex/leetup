@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Bell, CircleCheck, Lock, Search, UserPlus } from 'lucide-react-native';
+import { BadgeCheck, Bell, ChevronRight, CircleCheck, Lock, Search, UserPlus } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../../constants/theme';
 import { useAuth } from '../../lib/auth-context';
 import { fetchFeed, fetchTeasers, setLiked, unreadNotificationCount } from '../../lib/api';
@@ -72,10 +72,23 @@ function LockBanner({ teasers }: { teasers: Teaser[] }) {
   );
 }
 
+// Shown until the LeetCode account is verified; the first post does it
+function VerifyStrip({ username }: { username: string }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`Verify @${username}`} onPress={() => router.push('/verify')} style={styles.verify}>
+      <BadgeCheck size={16} color={Colors.medium} />
+      <T variant="monoMedium" style={{ fontSize: 12, flex: 1 }} numberOfLines={1}>
+        your first post verifies @{username}
+      </T>
+      <ChevronRight size={16} color={Colors.text3} />
+    </Pressable>
+  );
+}
+
 type Row = { type: 'section'; key: string; label: string } | { type: 'solve'; key: string; solve: FeedSolve };
 
 export default function Home() {
-  const { userId } = useAuth();
+  const { userId, link, verified } = useAuth();
   const [feed, setFeed] = useState<FeedSolve[] | null>(null);
   const [teasers, setTeasers] = useState<Teaser[]>([]);
   const [unread, setUnread] = useState(0);
@@ -155,6 +168,7 @@ export default function Home() {
       <Screen>
         {header}
         <View style={{ flex: 1, gap: 14, paddingHorizontal: 16, paddingTop: 4 }}>
+          {!verified && link ? <VerifyStrip username={link.leetcode_username} /> : null}
           <LockBanner teasers={teasers} />
           <LockedPanel teasers={teasers} />
         </View>
@@ -205,5 +219,6 @@ const styles = StyleSheet.create({
   dot: { position: 'absolute', top: 6, right: 7, width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.accent, borderWidth: 2, borderColor: Colors.surface },
   banner: { gap: 10, padding: 16, borderRadius: Radius.lg, backgroundColor: Colors.accentTint, borderWidth: 1, borderColor: Colors.accentLine },
   lockedChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.sm, backgroundColor: Colors.accentTint, borderWidth: 1, borderColor: Colors.accentLine },
+  verify: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 11, paddingHorizontal: 12, borderRadius: Radius.md, backgroundColor: Colors.mediumTint, borderWidth: 1, borderColor: Colors.mediumLine },
   strip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 11, paddingHorizontal: 12, marginBottom: 2, borderRadius: Radius.md, backgroundColor: Colors.accentTint, borderWidth: 1, borderColor: Colors.accentLine },
 });

@@ -62,7 +62,7 @@ function NameEditor({ onDone }: { onDone: () => void }) {
 }
 
 export default function Settings() {
-  const { profile, signOut } = useAuth();
+  const { profile, link, signOut } = useAuth();
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -100,8 +100,10 @@ export default function Settings() {
           <GroupRow
             icon={icon(Code)}
             label="LeetCode account"
-            detail={lc ? <T style={{ fontFamily: Fonts.mono, fontSize: 12 }} color={Colors.accent}>@{lc} ✓</T> : undefined}
-            onPress={lc ? () => open(`https://leetcode.com/u/${lc}/`, linkFailed) : undefined}
+            detail={lc
+              ? <T style={{ fontFamily: Fonts.mono, fontSize: 12 }} color={Colors.accent}>@{lc} ✓</T>
+              : link ? <T style={{ fontFamily: Fonts.mono, fontSize: 12 }} color={Colors.medium}>@{link.leetcode_username} · verify</T> : undefined}
+            onPress={lc ? () => open(`https://leetcode.com/u/${lc}/`, linkFailed) : link ? () => router.push('/verify') : undefined}
           />
           <GroupRow icon={icon(Ban)} label="Blocked users" detail={chevron} onPress={() => router.push('/blocked')} last />
         </Group>

@@ -3,7 +3,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { Colors } from '../constants/theme';
 import { IconButton, T } from './ui';
 
-export function StepHeader({ step, total = 3, onBack }: { step: number; total?: number; onBack?: () => void }) {
+export function StepHeader({ step, total = 2, onBack }: { step: number; total?: number; onBack?: () => void }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingRight: 20, paddingTop: 8, paddingBottom: 8 }}>
       {onBack ? (

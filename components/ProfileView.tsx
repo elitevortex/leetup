@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Check, Flame, UserX } from 'lucide-react-native';
+import { ChevronRight, Check, Flame, UserX } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../constants/theme';
 import { useAuth } from '../lib/auth-context';
 import { acceptFriendRequest, fetchProfileSummary, fetchUserSolves, removeFriendship, sendFriendRequest, syncProfile } from '../lib/api';
@@ -131,7 +131,7 @@ function RelationshipAction({ summary, onChange }: { summary: ProfileSummary; on
 }
 
 export function ProfileView({ username }: { username: string }) {
-  const { userId } = useAuth();
+  const { userId, link } = useAuth();
   const [summary, setSummary] = useState<ProfileSummary | null | undefined>(undefined);
   const [solves, setSolves] = useState<FeedSolve[]>([]);
   const [failed, setFailed] = useState(false);
@@ -186,6 +186,8 @@ export function ProfileView({ username }: { username: string }) {
 
   const self = summary.relationship === 'self';
   const solved = summary.lc_easy + summary.lc_medium + summary.lc_hard;
+  // LeetCode stats only show once the account is proven to be theirs
+  const verified = !!summary.leetcode_username;
 
   return (
     <ScrollView
@@ -203,8 +205,13 @@ export function ProfileView({ username }: { username: string }) {
               <Check size={12} color={Colors.accent} strokeWidth={2.6} />
               <T style={{ fontFamily: Fonts.monoMedium, fontSize: 11 }} color={Colors.accent}>leetcode · @{summary.leetcode_username}</T>
             </View>
+          ) : self && link ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={`LeetCode @${link.leetcode_username} is unverified. Verify`} onPress={() => router.push('/verify')} style={[styles.chip, styles.unverified]}>
+              <T style={{ fontFamily: Fonts.monoMedium, fontSize: 11 }} color={Colors.medium}>@{link.leetcode_username} · unverified</T>
+              <ChevronRight size={12} color={Colors.medium} />
+            </Pressable>
           ) : (
-            <T style={{ fontFamily: Fonts.mono, fontSize: 12 }} color={Colors.text3}>@{summary.username}</T>
+            <T style={{ fontFamily: Fonts.mono, fontSize: 12 }} color={Colors.text3}>@{summary.username} · unverified</T>
           )}
         </View>
       </View>
@@ -212,21 +219,27 @@ export function ProfileView({ username }: { username: string }) {
       {!self ? <RelationshipAction summary={summary} onChange={changeRelationship} /> : null}
 
       <View style={{ flexDirection: 'row', gap: 10 }}>
-        <StatCard value={solved.toLocaleString('en-US')} label="Solved" />
+        <StatCard value={verified ? solved.toLocaleString('en-US') : '–'} label="Solved" />
         <StatCard value={String(summary.streak)} label="Day streak" icon={<Flame size={18} color={Colors.medium} />} />
         <StatCard value={String(summary.friends_count)} label="Friends" />
       </View>
 
-      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
-        <T style={styles.diff} color={Colors.easy}>{summary.lc_easy} easy</T>
-        <T style={styles.diff} color={Colors.text3}>·</T>
-        <T style={styles.diff} color={Colors.medium}>{summary.lc_medium} med</T>
-        <T style={styles.diff} color={Colors.text3}>·</T>
-        <T style={styles.diff} color={Colors.hard}>{summary.lc_hard} hard</T>
-      </View>
+      {verified ? (
+        <>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+            <T style={styles.diff} color={Colors.easy}>{summary.lc_easy} easy</T>
+            <T style={styles.diff} color={Colors.text3}>·</T>
+            <T style={styles.diff} color={Colors.medium}>{summary.lc_medium} med</T>
+            <T style={styles.diff} color={Colors.text3}>·</T>
+            <T style={styles.diff} color={Colors.hard}>{summary.lc_hard} hard</T>
+          </View>
 
-      <SectionLabel>Last 12 weeks</SectionLabel>
-      <ContributionGrid calendar={summary.lc_calendar} />
+          <SectionLabel>Last 12 weeks</SectionLabel>
+          <ContributionGrid calendar={summary.lc_calendar} />
+        </>
+      ) : (
+        <T variant="monoSm" style={{ textAlign: 'center' }}>// leetcode stats show once {self ? 'you’re' : 'they’re'} verified</T>
+      )}
 
       <SectionLabel>Recent</SectionLabel>
       {solves.length ? (
@@ -242,6 +255,7 @@ export function ProfileView({ username }: { username: string }) {
 
 const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.sm, backgroundColor: Colors.accentTint, borderWidth: 1, borderColor: Colors.accentLine },
+  unverified: { backgroundColor: Colors.mediumTint, borderColor: Colors.mediumLine },
   statCard: { flex: 1, gap: 4, padding: 14, borderRadius: 14, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   card: { gap: 12, padding: 14, borderRadius: 14, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   recentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
