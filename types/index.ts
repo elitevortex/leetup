@@ -55,6 +55,8 @@ export interface FeedSolve {
   likes_count: number;
   comments_count: number;
   liked_by_me: boolean;
+  // Up to three people who liked it, you first, then most recent
+  likers: PersonSummary[];
 }
 
 export interface Teaser {

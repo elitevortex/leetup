@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardGestureArea, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowUp, Ellipsis, Lock } from 'lucide-react-native';
@@ -10,7 +12,7 @@ import { formatTimestamp } from '../../lib/format';
 import { splitCode } from '../../lib/social';
 import { Comment, FeedSolve } from '../../types';
 import { Avatar, Button, EmptyState, IconButton, Loading, NavHeader, Screen, SectionLabel, T } from '../../components/ui';
-import { SolveCard } from '../../components/SolveCard';
+import { applyLike, SolveCard } from '../../components/SolveCard';
 
 const CONFIRM_MS = 4000;
 
@@ -35,7 +37,15 @@ export default function SolveDetail() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const insets = useSafeAreaInsets();
+  // Follows the keyboard frame by frame, including while it's dragged down, so the composer
+  // rides on top of it like Strava's; at rest it clears the home indicator instead
+  const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
+  const composerInset = useAnimatedStyle(() => {
+    const kb = -keyboardHeight.value;
+    return { paddingBottom: kb > insets.bottom ? kb + 10 : Math.max(insets.bottom, 10) };
+  });
 
   const load = useCallback(async () => {
     if (!userId || !id) return;
@@ -53,6 +63,12 @@ export default function SolveDetail() {
     load();
   }, [load]);
 
+  const refresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
+
   // A pending "tap again to delete" quietly expires
   useEffect(() => {
     if (!confirmDelete) return;
@@ -62,16 +78,16 @@ export default function SolveDetail() {
 
   const toggleLike = useCallback(
     async (s: FeedSolve) => {
-      if (!userId) return;
+      if (!userId || !profile) return;
       const next = !s.liked_by_me;
-      setSolve((prev) => (prev ? { ...prev, liked_by_me: next, likes_count: prev.likes_count + (next ? 1 : -1) } : prev));
+      setSolve((prev) => (prev ? applyLike(prev, profile, next) : prev));
       try {
         await setLiked(s.id, userId, next);
       } catch {
-        setSolve((prev) => (prev ? { ...prev, liked_by_me: s.liked_by_me, likes_count: s.likes_count } : prev));
+        setSolve(s);
       }
     },
-    [userId],
+    [userId, profile],
   );
 
   const openMore = () => {
@@ -158,11 +174,14 @@ export default function SolveDetail() {
   return (
     <Screen>
       <NavHeader title="Post" right={more} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardGestureArea interpolator="ios" style={{ flex: 1 }} textInputNativeID="comment-input">
         <FlatList
           data={comments}
           keyExtractor={(c) => c.id}
           keyboardShouldPersistTaps="handled"
+          // Drag the comments down and the keyboard follows your finger
+          keyboardDismissMode="interactive"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.text2} />}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
           ListHeaderComponent={
             <View style={{ gap: 18, paddingBottom: 6 }}>
@@ -210,7 +229,7 @@ export default function SolveDetail() {
           }}
         />
 
-        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        <Animated.View style={[styles.composer, composerInset]}>
           {error ? (
             <T variant="bodySm" color={Colors.hard} accessibilityLiveRegion="polite">{error}</T>
           ) : null}
@@ -227,6 +246,7 @@ export default function SolveDetail() {
                 maxLength={500}
                 multiline
                 accessibilityLabel="Add a comment"
+                nativeID="comment-input"
                 style={styles.field}
               />
             </View>
@@ -240,8 +260,8 @@ export default function SolveDetail() {
               {sending ? <ActivityIndicator size="small" color={Colors.accentInk} /> : <ArrowUp size={20} color={Colors.accentInk} strokeWidth={2.5} />}
             </Pressable>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+        </Animated.View>
+      </KeyboardGestureArea>
     </Screen>
   );
 }

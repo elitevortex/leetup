@@ -135,17 +135,29 @@ async function signMedia(solves: FeedSolve[]): Promise<FeedSolve[]> {
 
 async function shapeSolves(rows: any[], userId: string): Promise<FeedSolve[]> {
   const ids = rows.map((r) => r.id);
-  const liked = ids.length
-    ? check(await supabase.from('likes').select('solve_id').eq('user_id', userId).in('solve_id', ids))
+  const likes = ids.length
+    ? (check(
+        await supabase
+          .from('likes')
+          .select(`solve_id, user_id, profile:profiles(${PERSON})`)
+          .in('solve_id', ids)
+          .order('created_at', { ascending: false }),
+      ) as unknown as { solve_id: string; user_id: string; profile: PersonSummary }[])
     : [];
-  const likedSet = new Set((liked as { solve_id: string }[]).map((l) => l.solve_id));
-  const shaped: FeedSolve[] = rows.map((r) => ({
-    ...r,
-    media: (r.media ?? []) as SolveMedia[],
-    likes_count: r.likes?.[0]?.count ?? 0,
-    comments_count: r.comments?.[0]?.count ?? 0,
-    liked_by_me: likedSet.has(r.id),
-  }));
+  const bySolve = new Map<string, typeof likes>();
+  likes.forEach((l) => bySolve.set(l.solve_id, [...(bySolve.get(l.solve_id) ?? []), l]));
+  const shaped: FeedSolve[] = rows.map((r) => {
+    const mine = bySolve.get(r.id) ?? [];
+    const liked = mine.some((l) => l.user_id === userId);
+    return {
+      ...r,
+      media: (r.media ?? []) as SolveMedia[],
+      likes_count: r.likes?.[0]?.count ?? 0,
+      comments_count: r.comments?.[0]?.count ?? 0,
+      liked_by_me: liked,
+      likers: [...mine].sort((a, b) => Number(b.user_id === userId) - Number(a.user_id === userId)).slice(0, 3).map((l) => l.profile),
+    };
+  });
   return signMedia(shaped);
 }
 
