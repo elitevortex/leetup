@@ -3,6 +3,7 @@ import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import {
   useFonts,
   Geist_400Regular,
@@ -60,20 +61,22 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.bg }}>
-      <AuthProvider>
-        <StatusBar style="light" />
-        <AuthGate />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg }, animation: 'slide_from_right' }}>
-          <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
-          <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
-          <Stack.Screen name="(onboarding)" options={{ animation: 'fade' }} />
-          <Stack.Screen name="timer" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', gestureEnabled: false }} />
-          <Stack.Screen name="post" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
-          <Stack.Screen name="celebrate" options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }} />
-          <Stack.Screen name="media/[solveId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
-          <Stack.Screen name="report" options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
-        </Stack>
-      </AuthProvider>
+      <KeyboardProvider>
+        <AuthProvider>
+          <StatusBar style="light" />
+          <AuthGate />
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg }, animation: 'slide_from_right' }}>
+            <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+            <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
+            <Stack.Screen name="(onboarding)" options={{ animation: 'fade' }} />
+            <Stack.Screen name="timer" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', gestureEnabled: false }} />
+            <Stack.Screen name="post" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+            <Stack.Screen name="celebrate" options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }} />
+            <Stack.Screen name="media/[solveId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
+            <Stack.Screen name="report" options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
+          </Stack>
+        </AuthProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

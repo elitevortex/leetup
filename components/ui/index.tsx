@@ -272,15 +272,26 @@ export function Avatar({ name, url, size = 36, ring }: { name: string; url?: str
   );
 }
 
-export function AvatarStack({ people, max = 4 }: { people: { id: string; name: string; url?: string | null }[]; max?: number }) {
+export function AvatarStack({
+  people,
+  max = 4,
+  size = 30,
+  ring = Colors.bg,
+}: {
+  people: { id: string; name: string; url?: string | null }[];
+  max?: number;
+  size?: number;
+  // Matches the background the stack sits on, so the overlap reads as a cut-out
+  ring?: string;
+}) {
   const shown = people.slice(0, max);
   const extra = people.length - shown.length;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <View style={{ flexDirection: 'row' }}>
         {shown.map((p, i) => (
-          <View key={p.id} style={{ marginLeft: i === 0 ? 0 : -8, borderRadius: 18, borderWidth: 2, borderColor: Colors.bg }}>
-            <Avatar name={p.name} url={p.url} size={30} />
+          <View key={p.id} style={{ marginLeft: i === 0 ? 0 : -size / 4, borderRadius: size, borderWidth: 2, borderColor: ring }}>
+            <Avatar name={p.name} url={p.url} size={size} />
           </View>
         ))}
       </View>

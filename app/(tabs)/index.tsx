@@ -9,7 +9,7 @@ import { formatTimestamp } from '../../lib/format';
 import { getHiddenSolves } from '../../lib/social';
 import { FeedSolve, FeedState, Teaser } from '../../types';
 import { AvatarStack, Button, EmptyState, Loading, Screen, SectionLabel, T, Wordmark } from '../../components/ui';
-import { SolveCard } from '../../components/SolveCard';
+import { applyLike, SolveCard } from '../../components/SolveCard';
 import { LockedPanel } from '../../components/LockedPanel';
 
 function isToday(iso: string) {
@@ -88,7 +88,7 @@ function VerifyStrip({ username }: { username: string }) {
 type Row = { type: 'section'; key: string; label: string } | { type: 'solve'; key: string; solve: FeedSolve };
 
 export default function Home() {
-  const { userId, link, verified } = useAuth();
+  const { userId, profile, link, verified } = useAuth();
   const [feed, setFeed] = useState<FeedSolve[] | null>(null);
   const [teasers, setTeasers] = useState<Teaser[]>([]);
   const [state, setState] = useState<FeedState | null>(null);
@@ -118,17 +118,16 @@ export default function Home() {
 
   const toggleLike = useCallback(
     async (solve: FeedSolve) => {
-      if (!userId) return;
+      if (!userId || !profile) return;
       const next = !solve.liked_by_me;
-      const patch = (s: FeedSolve) => (s.id === solve.id ? { ...s, liked_by_me: next, likes_count: s.likes_count + (next ? 1 : -1) } : s);
-      setFeed((prev) => prev?.map(patch) ?? prev);
+      setFeed((prev) => prev?.map((s) => (s.id === solve.id ? applyLike(s, profile, next) : s)) ?? prev);
       try {
         await setLiked(solve.id, userId, next);
       } catch {
         setFeed((prev) => prev?.map((s) => (s.id === solve.id ? solve : s)) ?? prev);
       }
     },
-    [userId],
+    [userId, profile],
   );
 
   const openMore = useCallback(

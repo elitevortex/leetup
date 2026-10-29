@@ -5,8 +5,11 @@ import { Image } from 'expo-image';
 import { Ellipsis, Heart, MessageCircle, Play, Share as ShareIcon } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../constants/theme';
 import { formatDuration, formatTimestamp, pace, shortLang } from '../lib/format';
-import { DIFFICULTY_POINTS, FeedSolve, SolveMedia } from '../types';
-import { Avatar, Card, DifficultyPill, T } from './ui';
+import { DIFFICULTY_POINTS, FeedSolve, PersonSummary, SolveMedia } from '../types';
+import { Avatar, AvatarStack, Card, DifficultyPill, T } from './ui';
+
+// Close to Strava's action icons
+const ICON = 26;
 
 function Stat({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
   return (
@@ -28,38 +31,71 @@ export function SolveStats({ solve }: { solve: Pick<FeedSolve, 'time_seconds' | 
   );
 }
 
+function MediaTile({ solveId, media, index, style }: { solveId: string; media: SolveMedia; index: number; style: object }) {
+  return (
+    <Pressable
+      accessibilityRole="imagebutton"
+      accessibilityLabel={media.kind === 'video' ? 'Play video' : 'Open photo'}
+      onPress={() => router.push({ pathname: '/media/[solveId]', params: { solveId, index: String(index) } })}
+      style={[styles.tile, style]}
+    >
+      {media.kind === 'photo' && media.url ? (
+        <Image source={{ uri: media.url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+      ) : null}
+      {media.kind === 'video' ? (
+        <>
+          <View style={styles.play}>
+            <Play size={16} color={Colors.text} fill={Colors.text} />
+          </View>
+          {media.duration_seconds ? (
+            <View style={styles.duration}>
+              <T style={{ fontFamily: Fonts.monoMedium, fontSize: 10 }} color={Colors.text}>{formatDuration(media.duration_seconds)}</T>
+            </View>
+          ) : null}
+        </>
+      ) : null}
+    </Pressable>
+  );
+}
+
+// Explicit rows rather than a wrapping row: a percentage width plus aspectRatio inside flexWrap
+// gets the wrong height on iOS, which cropped photos and left a gap under them
 export function MediaGrid({ solveId, media }: { solveId: string; media: SolveMedia[] }) {
   if (media.length === 0) return null;
-  const single = media.length === 1;
+  if (media.length === 1) return <MediaTile solveId={solveId} media={media[0]} index={0} style={{ width: '100%', aspectRatio: 4 / 3 }} />;
+  const rows: SolveMedia[][] = [];
+  for (let i = 0; i < media.length; i += 2) rows.push(media.slice(i, i + 2));
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {media.map((m, index) => (
-        <Pressable
-          key={m.id}
-          accessibilityRole="imagebutton"
-          accessibilityLabel={m.kind === 'video' ? 'Play video' : 'Open photo'}
-          onPress={() => router.push({ pathname: '/media/[solveId]', params: { solveId, index: String(index) } })}
-          style={[styles.tile, single ? { width: '100%', aspectRatio: 16 / 10 } : { width: '48.6%', aspectRatio: 1 }]}
-        >
-          {m.kind === 'photo' && m.url ? (
-            <Image source={{ uri: m.url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
-          ) : null}
-          {m.kind === 'video' ? (
-            <>
-              <View style={styles.play}>
-                <Play size={16} color={Colors.text} fill={Colors.text} />
-              </View>
-              {m.duration_seconds ? (
-                <View style={styles.duration}>
-                  <T style={{ fontFamily: Fonts.monoMedium, fontSize: 10 }} color={Colors.text}>{formatDuration(m.duration_seconds)}</T>
-                </View>
-              ) : null}
-            </>
-          ) : null}
-        </Pressable>
+    <View style={{ gap: 8 }}>
+      {rows.map((row, r) => (
+        <View key={r} style={{ flexDirection: 'row', gap: 8 }}>
+          {row.map((m, i) => <MediaTile key={m.id} solveId={solveId} media={m} index={r * 2 + i} style={{ flex: 1, aspectRatio: 1 }} />)}
+          {row.length === 1 ? <View style={{ flex: 1 }} /> : null}
+        </View>
       ))}
     </View>
   );
+}
+
+// Optimistic like/unlike, keeping the liker faces in step
+export function applyLike(solve: FeedSolve, me: PersonSummary, liked: boolean): FeedSolve {
+  const others = solve.likers.filter((p) => p.id !== me.id);
+  return {
+    ...solve,
+    liked_by_me: liked,
+    likes_count: Math.max(0, solve.likes_count + (liked ? 1 : -1)),
+    likers: liked ? [me, ...others].slice(0, 3) : others,
+  };
+}
+
+function likeLine(solve: FeedSolve): string | null {
+  const n = solve.likes_count;
+  if (n === 0) return null;
+  const rest = (k: number) => `${k} ${k === 1 ? 'other' : 'others'}`;
+  if (solve.liked_by_me) return n === 1 ? 'You liked this' : `You and ${rest(n - 1)} liked this`;
+  const first = solve.likers[0]?.display_name.split(' ')[0];
+  if (!first) return `${n} liked this`;
+  return n === 1 ? `${first} liked this` : `${first} and ${rest(n - 1)} liked this`;
 }
 
 function SolveCardBase({
@@ -82,6 +118,8 @@ function SolveCardBase({
         solve.time_seconds ? ` in ${formatDuration(solve.time_seconds)}` : ''
       } on LeetUp`,
     });
+
+  const likes = likeLine(solve);
 
   return (
     <Card onPress={open} style={{ gap: 14 }}>
@@ -110,6 +148,24 @@ function SolveCardBase({
       <SolveStats solve={solve} />
       <MediaGrid solveId={solve.id} media={solve.media} />
 
+      {likes || solve.comments_count > 0 ? (
+        <View style={styles.summary}>
+          {likes ? (
+            <>
+              <AvatarStack people={solve.likers.map((p) => ({ id: p.id, name: p.display_name, url: p.avatar_url }))} max={3} size={26} ring={Colors.surface} />
+              <T variant="bodySm" style={{ flex: 1 }} color={Colors.text2} numberOfLines={1}>{likes}</T>
+            </>
+          ) : <View style={{ flex: 1 }} />}
+          {solve.comments_count > 0 ? (
+            <Pressable accessibilityRole="button" onPress={open} hitSlop={8}>
+              <T variant="bodySm" color={highlightComments ? Colors.accent : Colors.text2}>
+                {solve.comments_count} {solve.comments_count === 1 ? 'comment' : 'comments'}
+              </T>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       <View style={styles.foot}>
         <Pressable
           accessibilityRole="button"
@@ -117,17 +173,15 @@ function SolveCardBase({
           accessibilityState={{ selected: solve.liked_by_me }}
           onPress={() => onToggleLike?.(solve)}
           hitSlop={8}
-          style={[styles.action, { justifyContent: 'flex-start' }]}
+          style={styles.action}
         >
-          <Heart size={18} color={solve.liked_by_me ? Colors.like : Colors.text2} fill={solve.liked_by_me ? Colors.like : 'transparent'} />
-          <T style={styles.count} color={Colors.text2}>{solve.likes_count}</T>
+          <Heart size={ICON} color={solve.liked_by_me ? Colors.like : Colors.text} fill={solve.liked_by_me ? Colors.like : 'transparent'} strokeWidth={2} />
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={`${solve.comments_count} comments`} onPress={open} hitSlop={8} style={styles.action}>
-          <MessageCircle size={18} color={highlightComments ? Colors.accent : Colors.text2} />
-          <T style={styles.count} color={highlightComments ? Colors.accent : Colors.text2}>{solve.comments_count}</T>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Comments, ${solve.comments_count}`} onPress={open} hitSlop={8} style={styles.action}>
+          <MessageCircle size={ICON} color={highlightComments ? Colors.accent : Colors.text} strokeWidth={2} />
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Share" onPress={share} hitSlop={8} style={[styles.action, { justifyContent: 'flex-end' }]}>
-          <ShareIcon size={18} color={Colors.text2} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Share" onPress={share} hitSlop={8} style={styles.action}>
+          <ShareIcon size={ICON} color={Colors.text} strokeWidth={2} />
         </Pressable>
       </View>
     </Card>
@@ -143,7 +197,7 @@ const styles = StyleSheet.create({
   tile: { borderRadius: Radius.md, overflow: 'hidden', backgroundColor: Colors.surface2, alignItems: 'center', justifyContent: 'center' },
   play: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center' },
   duration: { position: 'absolute', left: 8, bottom: 8, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, backgroundColor: Colors.bg },
-  foot: { flexDirection: 'row', alignItems: 'center' },
-  action: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  count: { fontFamily: Fonts.monoMedium, fontSize: 13 },
+  summary: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  foot: { flexDirection: 'row', alignItems: 'center', marginHorizontal: -16, marginBottom: -6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.border },
+  action: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8 },
 });
