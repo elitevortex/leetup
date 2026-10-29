@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Keyboard, Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
 import { KeyboardGestureArea, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowUp, Ellipsis, Lock } from 'lucide-react-native';
+import { ArrowUp, Ellipsis, Heart, Lock } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../../constants/theme';
 import { useAuth } from '../../lib/auth-context';
 import { addComment, deleteComment, fetchComments, fetchSolve, setLiked } from '../../lib/api';
 import { formatTimestamp } from '../../lib/format';
 import { splitCode } from '../../lib/social';
 import { Comment, FeedSolve } from '../../types';
-import { Avatar, Button, EmptyState, IconButton, Loading, NavHeader, Screen, SectionLabel, T } from '../../components/ui';
-import { applyLike, SolveCard } from '../../components/SolveCard';
+import { Avatar, Button, DifficultyPill, EmptyState, IconButton, NavHeader, Screen, SectionLabel, T } from '../../components/ui';
+import { applyLike, LikeSummary, SolveStats } from '../../components/SolveCard';
 
 const CONFIRM_MS = 4000;
 
@@ -23,6 +23,48 @@ function CommentBody({ body }: { body: string }) {
         p.code ? <T key={i} style={styles.code}>{p.text}</T> : p.text,
       )}
     </T>
+  );
+}
+
+// Strava-style discussion header: what, who and when, the stats and the likes. No media, so the
+// comments start high enough to stay visible above the keyboard.
+function DiscussionHeader({ solve, onToggleLike }: { solve: FeedSolve; onToggleLike: () => void }) {
+  return (
+    <View style={{ gap: 12, paddingTop: 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <T variant="cardTitle" style={{ flex: 1 }} numberOfLines={2}>
+          <T style={{ fontFamily: Fonts.monoMedium, fontSize: 14 }} color={Colors.text3}>#{solve.problem.frontend_id} </T>
+          {solve.problem.title}
+        </T>
+        <DifficultyPill difficulty={solve.problem.difficulty} />
+      </View>
+      <Pressable
+        accessibilityRole="link"
+        onPress={() => router.push({ pathname: '/u/[username]', params: { username: solve.profile.username } })}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+      >
+        <Avatar name={solve.profile.display_name} url={solve.profile.avatar_url} size={24} />
+        <T variant="bodySm" color={Colors.text2} numberOfLines={1} style={{ flex: 1 }}>
+          {solve.profile.display_name} · {formatTimestamp(solve.created_at)}
+        </T>
+      </Pressable>
+      {solve.note ? <T variant="monoSm">{`// ${solve.note}`}</T> : null}
+      <SolveStats solve={solve} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={solve.liked_by_me ? 'Unlike' : 'Like'}
+          accessibilityState={{ selected: solve.liked_by_me }}
+          onPress={onToggleLike}
+          hitSlop={10}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+        >
+          <Heart size={24} color={solve.liked_by_me ? Colors.like : Colors.text} fill={solve.liked_by_me ? Colors.like : 'transparent'} strokeWidth={2} />
+          {solve.likes_count === 0 ? <T variant="monoMedium" color={Colors.text2}>0</T> : null}
+        </Pressable>
+        <LikeSummary solve={solve} ring={Colors.bg} />
+      </View>
+    </View>
   );
 }
 
@@ -38,6 +80,7 @@ export default function SolveDetail() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const list = useRef<FlatList<Comment>>(null);
   const insets = useSafeAreaInsets();
   // Follows the keyboard frame by frame, including while it's dragged down, so the composer
   // rides on top of it like Strava's; at rest it clears the home indicator instead
@@ -62,6 +105,12 @@ export default function SolveDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Bring the newest comments into view above the keyboard, like a chat
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidShow', () => list.current?.scrollToEnd({ animated: true }));
+    return () => sub.remove();
+  }, []);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -112,6 +161,7 @@ export default function SolveDetail() {
       const next = await fetchComments(id);
       setComments(next);
       setSolve((prev) => (prev ? { ...prev, comments_count: next.length } : prev));
+      requestAnimationFrame(() => list.current?.scrollToEnd({ animated: true }));
     } catch {
       setError('Couldn’t post your comment. Try again.');
     } finally {
@@ -144,7 +194,7 @@ export default function SolveDetail() {
   if (loadError) {
     return (
       <Screen>
-        <NavHeader title="Post" />
+        <NavHeader title="Discussion" />
         <EmptyState title="Couldn’t load this post" body="Check your connection and try again." action={<Button title="Try again" pill onPress={load} />} />
       </Screen>
     );
@@ -153,8 +203,8 @@ export default function SolveDetail() {
   if (solve === undefined) {
     return (
       <Screen>
-        <NavHeader title="Post" />
-        <Loading />
+        <NavHeader title="Discussion" />
+        <ActivityIndicator color={Colors.text2} style={{ marginTop: 24 }} />
       </Screen>
     );
   }
@@ -162,7 +212,7 @@ export default function SolveDetail() {
   if (solve === null) {
     return (
       <Screen>
-        <NavHeader title="Post" />
+        <NavHeader title="Discussion" />
         <EmptyState icon={<Lock size={28} color={Colors.text3} />} title="This post is locked or gone" body="Post a solve today to see your friends’ posts." />
       </Screen>
     );
@@ -173,9 +223,10 @@ export default function SolveDetail() {
 
   return (
     <Screen>
-      <NavHeader title="Post" right={more} />
+      <NavHeader title="Discussion" right={more} />
       <KeyboardGestureArea interpolator="ios" style={{ flex: 1 }} textInputNativeID="comment-input">
         <FlatList
+          ref={list}
           data={comments}
           keyExtractor={(c) => c.id}
           keyboardShouldPersistTaps="handled"
@@ -185,7 +236,7 @@ export default function SolveDetail() {
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
           ListHeaderComponent={
             <View style={{ gap: 18, paddingBottom: 6 }}>
-              <SolveCard solve={solve} pressable={false} highlightComments onToggleLike={toggleLike} />
+              <DiscussionHeader solve={solve} onToggleLike={() => toggleLike(solve)} />
               <SectionLabel>{`${solve.comments_count} ${solve.comments_count === 1 ? 'comment' : 'comments'}`}</SectionLabel>
             </View>
           }

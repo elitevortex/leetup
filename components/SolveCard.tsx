@@ -88,6 +88,18 @@ export function applyLike(solve: FeedSolve, me: PersonSummary, liked: boolean): 
   };
 }
 
+// Up to three liker faces and "You and 3 others liked this"
+export function LikeSummary({ solve, ring = Colors.surface }: { solve: FeedSolve; ring?: string }) {
+  const line = likeLine(solve);
+  if (!line) return null;
+  return (
+    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <AvatarStack people={solve.likers.map((p) => ({ id: p.id, name: p.display_name, url: p.avatar_url }))} max={3} size={26} ring={ring} />
+      <T variant="bodySm" style={{ flex: 1 }} color={Colors.text2} numberOfLines={1}>{line}</T>
+    </View>
+  );
+}
+
 function likeLine(solve: FeedSolve): string | null {
   const n = solve.likes_count;
   if (n === 0) return null;
@@ -150,12 +162,7 @@ function SolveCardBase({
 
       {likes || solve.comments_count > 0 ? (
         <View style={styles.summary}>
-          {likes ? (
-            <>
-              <AvatarStack people={solve.likers.map((p) => ({ id: p.id, name: p.display_name, url: p.avatar_url }))} max={3} size={26} ring={Colors.surface} />
-              <T variant="bodySm" style={{ flex: 1 }} color={Colors.text2} numberOfLines={1}>{likes}</T>
-            </>
-          ) : <View style={{ flex: 1 }} />}
+          {likes ? <LikeSummary solve={solve} /> : <View style={{ flex: 1 }} />}
           {solve.comments_count > 0 ? (
             <Pressable accessibilityRole="button" onPress={open} hitSlop={8}>
               <T variant="bodySm" color={highlightComments ? Colors.accent : Colors.text2}>
