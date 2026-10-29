@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { Stack, router, useSegments } from 'expo-router';
+import { Stack, router, usePathname, useSegments } from 'expo-router';
+import { Keyboard } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -23,6 +24,15 @@ import { Colors } from '../constants/theme';
 SplashScreen.preventAutoHideAsync();
 
 // Sends people to the right step for their account state, wherever they are
+// A focused field on a screen you leave keeps the keyboard up; any navigation should drop it
+function KeyboardDismisser() {
+  const pathname = usePathname();
+  useEffect(() => {
+    Keyboard.dismiss();
+  }, [pathname]);
+  return null;
+}
+
 function AuthGate() {
   const { status } = useAuth();
   const segments = useSegments() as string[];
@@ -65,6 +75,7 @@ export default function RootLayout() {
         <AuthProvider>
           <StatusBar style="light" />
           <AuthGate />
+          <KeyboardDismisser />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg }, animation: 'slide_from_right' }}>
             <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
             <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
