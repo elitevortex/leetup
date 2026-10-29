@@ -114,5 +114,6 @@ serve(async (req, body) => {
   if (error?.code === '23505') return fail(409, 'already_posted', 'You’ve already posted this submission.');
   if (error) throw error;
 
-  return json({ solve, problem, verified_now: verifiedNow });
+  // verify_held: another LeetUp account already proved this LeetCode account, so the app can say why
+  return json({ solve, problem, verified_now: verifiedNow, verify_held: verifying && !verifiedNow });
 });

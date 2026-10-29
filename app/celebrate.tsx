@@ -18,6 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Crown, Flame, LockOpen, Trophy, Zap } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../constants/theme';
+import { useAuth } from '../lib/auth-context';
 import { fetchCelebration } from '../lib/api';
 import { formatDuration } from '../lib/format';
 import { Celebration, Difficulty } from '../types';
@@ -105,7 +106,8 @@ const ICONS = { trophy: Trophy, crown: Crown, zap: Zap, flame: Flame };
 export default function Celebrate() {
   const reduced = useReducedMotion();
   const { width, height } = useWindowDimensions();
-  const params = useLocalSearchParams<{ solveId?: string; num?: string; title?: string; difficulty?: Difficulty; points?: string }>();
+  const { link } = useAuth();
+  const params = useLocalSearchParams<{ solveId?: string; num?: string; title?: string; difficulty?: Difficulty; points?: string; verifyHeld?: string }>();
   const difficulty: Difficulty = params.difficulty ?? 'Medium';
   const [data, setData] = useState<Celebration | null>(null);
   const [done, setDone] = useState(reduced);
@@ -301,6 +303,15 @@ export default function Celebrate() {
           ) : (
             <Button title="Back to feed" variant="secondary" onPress={goHome} />
           )}
+
+          {params.verifyHeld ? (
+            <Pressable accessibilityRole="link" onPress={() => router.replace('/verify')} hitSlop={6}>
+              <T variant="bodySm" color={Colors.text2} style={{ textAlign: 'center' }}>
+                This post didn’t verify you: @{link?.leetcode_username ?? 'that account'} is already verified on another LeetUp account.{' '}
+                <T variant="bodySm" color={Colors.accent}>Prove it’s yours with GitHub or a profile code →</T>
+              </T>
+            </Pressable>
+          ) : null}
         </Animated.View>
       </View>
     </View>

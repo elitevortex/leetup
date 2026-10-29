@@ -102,7 +102,7 @@ export default function PostSolve() {
     if (retryTimer.current) clearTimeout(retryTimer.current);
     setStatus(attempt === 0 ? { kind: 'posting' } : { kind: 'waiting', message: 'Checking LeetCode again…', attempt });
     try {
-      const { solve, verified_now } = await postSolve({
+      const { solve, verified_now, verify_held } = await postSolve({
         problem_slug: picked.slug,
         ...(timed ? { started_at: params.started_at, ended_at: params.ended_at, active_seconds: activeSeconds ?? undefined } : {}),
         note: note.trim() || undefined,
@@ -124,6 +124,7 @@ export default function PostSolve() {
           title: picked.title,
           difficulty: picked.difficulty,
           points: `+${DIFFICULTY_POINTS[picked.difficulty]}`,
+          ...(verify_held ? { verifyHeld: '1' } : {}),
         },
       });
     } catch (e) {

@@ -79,7 +79,7 @@ export async function searchProblems(q: string): Promise<Problem[]> {
 }
 
 export function postSolve(input: { problem_slug: string; started_at?: string; ended_at?: string; active_seconds?: number; note?: string }) {
-  return callFunction<{ solve: { id: string; time_seconds: number | null }; problem: Problem; verified_now: boolean }>('post-solve', input);
+  return callFunction<{ solve: { id: string; time_seconds: number | null }; problem: Problem; verified_now: boolean; verify_held: boolean }>('post-solve', input);
 }
 
 export async function uploadSolveMedia(
