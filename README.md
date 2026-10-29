@@ -19,7 +19,7 @@ npx expo start        # i = iOS simulator, w = browser
 
 Demo sign-in (email): `you@leetup.test` / `leetup-demo-123`. Home starts locked; post a solve (or re-run the seed) to unlock.
 
-Checks: `npm run typecheck` (app + Edge Functions) and `npm test` (unit tests + 37 database tests).
+Checks: `npm run typecheck` (app + Edge Functions) and `npm test` (unit tests + 46 database tests).
 
 ## How it fits together
 
@@ -40,6 +40,8 @@ Edge Functions: `leetcode-link` (connect + verification), `post-solve`, `sync-pr
 - a code in the LeetCode profile Summary (fallback on the Verify screen)
 
 Unverified claims don't reserve a username; when the real owner verifies, other unverified claims to it are removed. A post is the weakest proof (someone could post another person's public submission first), so GitHub or the profile code takes a username back from a link that only a post verified.
+
+**Mentions.** Typing `@` in a comment suggests the post's owner, people in the thread and your friends who can see the post. Tagged people get a notification if they can see the post and haven't blocked anyone involved.
 
 LeetCode's GraphQL endpoint is public but unofficial. All calls are server-side, small and cached; if it changes, only `supabase/functions/_shared/leetcode.ts` needs updating.
 

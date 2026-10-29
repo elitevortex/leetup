@@ -102,7 +102,7 @@ export interface LeaderboardRow extends PersonSummary {
   solves: number;
 }
 
-export type NotificationKind = 'like' | 'comment' | 'friend_request' | 'friend_accept';
+export type NotificationKind = 'like' | 'comment' | 'mention' | 'friend_request' | 'friend_accept';
 
 export interface AppNotification {
   id: string;
