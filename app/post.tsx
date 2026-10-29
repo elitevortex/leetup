@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { BadgeCheck, Camera, Check, ChevronLeft, Code, Image as ImageIcon, Play, Search, X } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../constants/theme';
 import { useAuth } from '../lib/auth-context';
-import { ApiError, postSolve, searchProblems, uploadSolveMedia } from '../lib/api';
+import { ApiError, fetchFeedState, postSolve, searchProblems, uploadSolveMedia } from '../lib/api';
 import { formatDuration } from '../lib/format';
 import { saveTimer } from '../lib/timer';
 import { DIFFICULTY_POINTS, Problem } from '../types';
@@ -41,6 +41,13 @@ export default function PostSolve() {
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [mediaError, setMediaError] = useState<string | null>(null);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Only promise an unlock when the database says home is still locked today
+  const [locked, setLocked] = useState(false);
+
+  useEffect(() => {
+    fetchFeedState().then((state) => setLocked(!state.unlocked)).catch(() => undefined);
+  }, []);
+
   // Debounced search against the synced LeetCode problem list
   useEffect(() => {
     if (picked || !query.trim()) {
@@ -272,7 +279,7 @@ export default function PostSolve() {
 
           <View style={{ flex: 1, minHeight: 12 }} />
           <Button
-            title={status.kind === 'error' ? 'Try again' : !verified ? 'Post solve · verify' : timed ? 'Post solve · unlock home' : 'Post solve'}
+            title={status.kind === 'error' ? 'Try again' : !verified ? 'Post solve · verify' : timed && locked ? 'Post solve · unlock home' : 'Post solve'}
             onPress={() => submit(0)}
             loading={busy}
             disabled={!picked}
