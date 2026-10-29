@@ -47,6 +47,7 @@
         "npm:lucide-react-native@^1.62.0",
         "npm:react-dom@19.3.0",
         "npm:react-native-gesture-handler@3.3",
+        "npm:react-native-keyboard-controller@1.22.7",
         "npm:react-native-qrcode-svg@^6.3.45",
         "npm:react-native-reanimated@4.7.1",
         "npm:react-native-safe-area-context@~5.10.1",

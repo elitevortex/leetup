@@ -225,6 +225,11 @@ export async function addComment(solveId: string, userId: string, body: string) 
   check(await supabase.from('comments').insert({ solve_id: solveId, user_id: userId, body: body.trim() }));
 }
 
+// People you can @tag on a post: its owner, the thread, and your friends who can see it
+export async function fetchMentionCandidates(solveId: string, q: string): Promise<PersonSummary[]> {
+  return check(await supabase.rpc('mention_candidates', { p_solve: solveId, q })) as PersonSummary[];
+}
+
 export async function deleteComment(commentId: string) {
   check(await supabase.from('comments').delete().eq('id', commentId));
 }

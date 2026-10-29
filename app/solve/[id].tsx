@@ -7,10 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowUp, Ellipsis, Heart, Lock } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../../constants/theme';
 import { useAuth } from '../../lib/auth-context';
-import { addComment, deleteComment, fetchComments, fetchSolve, setLiked } from '../../lib/api';
+import { addComment, deleteComment, fetchComments, fetchMentionCandidates, fetchSolve, setLiked } from '../../lib/api';
 import { formatTimestamp } from '../../lib/format';
-import { splitCode } from '../../lib/social';
-import { Comment, FeedSolve } from '../../types';
+import { activeMention, splitComment } from '../../lib/mentions';
+import { Comment, FeedSolve, PersonSummary } from '../../types';
 import { Avatar, Button, DifficultyPill, EmptyState, IconButton, NavHeader, Screen, SectionLabel, T } from '../../components/ui';
 import { applyLike, LikeSummary, SolveStats } from '../../components/SolveCard';
 
@@ -19,8 +19,21 @@ const CONFIRM_MS = 4000;
 function CommentBody({ body }: { body: string }) {
   return (
     <T style={styles.body}>
-      {splitCode(body).map((p, i) =>
-        p.code ? <T key={i} style={styles.code}>{p.text}</T> : p.text,
+      {splitComment(body).map((p, i) =>
+        p.code ? (
+          <T key={i} style={styles.code}>{p.text}</T>
+        ) : p.mention ? (
+          <T
+            key={i}
+            accessibilityRole="link"
+            onPress={() => router.push({ pathname: '/u/[username]', params: { username: p.mention! } })}
+            style={styles.mention}
+          >
+            {p.text}
+          </T>
+        ) : (
+          p.text
+        ),
       )}
     </T>
   );
@@ -80,6 +93,8 @@ export default function SolveDetail() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [cursor, setCursor] = useState(0);
+  const [suggestions, setSuggestions] = useState<PersonSummary[]>([]);
   const list = useRef<FlatList<Comment>>(null);
   const insets = useSafeAreaInsets();
   // Follows the keyboard frame by frame, including while it's dragged down, so the composer
@@ -111,6 +126,35 @@ export default function SolveDetail() {
     const sub = Keyboard.addListener('keyboardDidShow', () => list.current?.scrollToEnd({ animated: true }));
     return () => sub.remove();
   }, []);
+
+  // While an @handle is being typed, suggest people who can see the post
+  const mention = activeMention(draft, Math.min(cursor, draft.length));
+  const mentionQuery = mention?.query ?? null;
+  useEffect(() => {
+    if (mentionQuery === null || !id) {
+      setSuggestions([]);
+      return;
+    }
+    let live = true;
+    const t = setTimeout(() => {
+      fetchMentionCandidates(id, mentionQuery)
+        .then((people) => live && setSuggestions(people))
+        .catch(() => live && setSuggestions([]));
+    }, 150);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [mentionQuery, id]);
+
+  const pickMention = (p: PersonSummary) => {
+    if (!mention) return;
+    const end = Math.min(cursor, draft.length);
+    const insert = `@${p.username} `;
+    setDraft(draft.slice(0, mention.start) + insert + draft.slice(end).replace(/^\s+/, ''));
+    setCursor(mention.start + insert.length);
+    setSuggestions([]);
+  };
 
   const refresh = async () => {
     setRefreshing(true);
@@ -281,6 +325,23 @@ export default function SolveDetail() {
         />
 
         <Animated.View style={[styles.composer, composerInset]}>
+          {suggestions.length ? (
+            <View accessibilityLabel="People to tag" style={styles.suggestions}>
+              {suggestions.map((p) => (
+                <Pressable
+                  key={p.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Tag ${p.display_name}, @${p.username}`}
+                  onPress={() => pickMention(p)}
+                  style={({ pressed }) => [styles.suggestion, pressed && { backgroundColor: Colors.surface2 }]}
+                >
+                  <Avatar name={p.display_name} url={p.avatar_url} size={28} />
+                  <T style={styles.name} numberOfLines={1}>{p.display_name}</T>
+                  <T variant="monoSm" numberOfLines={1} style={{ flexShrink: 1 }}>@{p.username}</T>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
           {error ? (
             <T variant="bodySm" color={Colors.hard} accessibilityLiveRegion="polite">{error}</T>
           ) : null}
@@ -291,7 +352,8 @@ export default function SolveDetail() {
               <TextInput
                 value={draft}
                 onChangeText={setDraft}
-                placeholder="add a comment… `code` works"
+                onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
+                placeholder="add a comment… @ to tag a friend"
                 placeholderTextColor={Colors.text3}
                 selectionColor={Colors.accent}
                 maxLength={500}
@@ -323,6 +385,9 @@ const styles = StyleSheet.create({
   time: { fontFamily: Fonts.mono, fontSize: 11, lineHeight: 14, color: Colors.text3 },
   body: { fontFamily: Fonts.sans, fontSize: 14, lineHeight: 20, color: Colors.text2 },
   code: { fontFamily: Fonts.monoMedium, color: Colors.accent },
+  mention: { fontFamily: Fonts.sansSemiBold, color: Colors.accent },
+  suggestions: { marginHorizontal: -16, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  suggestion: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 16 },
   composer: { gap: 8, paddingTop: 10, paddingHorizontal: 16, backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.border },
   pill: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 9, borderRadius: Radius.full, backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.borderStrong },
   field: { flex: 1, fontFamily: Fonts.sans, fontSize: 15, color: Colors.text, paddingVertical: 0, minHeight: 20, maxHeight: 96 },

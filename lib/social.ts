@@ -18,10 +18,4 @@ export async function hideSolve(id: string) {
   await AsyncStorage.setItem(HIDDEN_KEY, JSON.stringify([...hidden]));
 }
 
-// "use a `Map` here" -> [{ text: 'use a ' }, { text: 'Map', code: true }, { text: ' here' }]
-export function splitCode(text: string): { text: string; code?: boolean }[] {
-  return text
-    .split(/`([^`\n]+)`/)
-    .map((part, i) => (i % 2 === 1 ? { text: part, code: true } : { text: part }))
-    .filter((p) => p.text.length > 0);
-}
+export { splitCode } from './mentions';

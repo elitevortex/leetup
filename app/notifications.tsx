@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Bell, Check, Heart, MessageCircle, UserPlus } from 'lucide-react-native';
+import { AtSign, Bell, Check, Heart, MessageCircle, UserPlus } from 'lucide-react-native';
 import { Colors, Fonts, Radius } from '../constants/theme';
 import { useAuth } from '../lib/auth-context';
 import { acceptFriendRequest, fetchFriendships, fetchNotifications, markNotificationsRead } from '../lib/api';
@@ -15,6 +15,7 @@ const EXCERPT = 80;
 const TITLES: Record<NotificationKind, string> = {
   like: 'New like',
   comment: 'New comment',
+  mention: 'Mentioned you',
   friend_request: 'Friend request',
   friend_accept: 'Request accepted',
 };
@@ -23,6 +24,7 @@ function Badge({ kind }: { kind: NotificationKind }) {
   const icon: Record<NotificationKind, ReactNode> = {
     like: <Heart size={10} color={Colors.accentInk} fill={Colors.accentInk} />,
     comment: <MessageCircle size={10} color={Colors.accentInk} strokeWidth={2.5} />,
+    mention: <AtSign size={10} color={Colors.accentInk} strokeWidth={2.5} />,
     friend_request: <UserPlus size={10} color={Colors.accentInk} strokeWidth={2.5} />,
     friend_accept: <Check size={10} color={Colors.accentInk} strokeWidth={3} />,
   };
@@ -40,7 +42,7 @@ function dayBucket(iso: string, now = new Date()): 'Today' | 'Yesterday' | 'Earl
 
 function Body({ n }: { n: AppNotification }) {
   const actor = n.actor?.display_name ?? 'Someone';
-  if (n.kind === 'comment') {
+  if (n.kind === 'comment' || n.kind === 'mention') {
     const raw = (n.comment?.body ?? '').replace(/\s+/g, ' ').trim();
     const excerpt = raw.length > EXCERPT ? `${raw.slice(0, EXCERPT).trimEnd()}…` : raw;
     return (
@@ -130,7 +132,7 @@ export default function Notifications() {
   };
 
   const open = (n: AppNotification) => {
-    if ((n.kind === 'like' || n.kind === 'comment') && n.solve_id) {
+    if ((n.kind === 'like' || n.kind === 'comment' || n.kind === 'mention') && n.solve_id) {
       router.push({ pathname: '/solve/[id]', params: { id: n.solve_id } });
     } else if ((n.kind === 'friend_request' || n.kind === 'friend_accept') && n.actor) {
       router.push({ pathname: '/u/[username]', params: { username: n.actor.username } });
